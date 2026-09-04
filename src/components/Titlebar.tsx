@@ -7,7 +7,7 @@ export function Titlebar() {
     <div className="brand">
       <span className="brand-mark">Y</span>
       <span className="brand-name">YTM Desktop</span>
-      <span className="version">0.3.1</span>
+      <span className="version">0.3.2</span>
     </div>
     <div className="window-actions">
       <button className="window-button" aria-label="Minimize" onClick={() => window.minimize()}><MinimizeIcon size={15}/></button>
