@@ -28,7 +28,7 @@ export function SettingsView() {
       .catch((e) => setUpdate({
         configured: true,
         available: false,
-        currentVersion: "0.3.0",
+        currentVersion: "0.3.1",
         message: String(e)
       }));
 
@@ -45,7 +45,7 @@ export function SettingsView() {
         if (cancelled || !result) return;
         setStatus(result);
         if (result.sourcePath) setPath(result.sourcePath);
-        setLoginMessage("Signed in successfully. The temporary Brave auth window will close automatically.");
+        setLoginMessage("Signed in successfully. YTM Desktop saved the YouTube Music session locally; you can keep using Brave normally.");
         setLoginBusy(false);
       } catch (e) {
         if (cancelled) return;
@@ -64,7 +64,7 @@ export function SettingsView() {
     setLoginBusy(true);
     try {
       await api.startWebLogin();
-      setLoginMessage("Brave opened with YTM Desktop's saved auth profile. Existing Google login state is reused after the one-time import.");
+      setLoginMessage("Your normal Brave profile opened. Existing Google accounts should already be there; YTM Desktop will capture only the active YouTube Music session automatically.");
     } catch (e) {
       setLoginBusy(false);
       setLoginMessage(String(e));
@@ -102,7 +102,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: false,
-        currentVersion: prev?.currentVersion || "0.3.0",
+        currentVersion: prev?.currentVersion || "0.3.1",
         source: prev?.source,
         message: String(e)
       }));
@@ -120,7 +120,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: prev?.available ?? false,
-        currentVersion: prev?.currentVersion || "0.3.0",
+        currentVersion: prev?.currentVersion || "0.3.1",
         version: prev?.version,
         notes: prev?.notes,
         publishedAt: prev?.publishedAt,
@@ -156,7 +156,7 @@ export function SettingsView() {
     <div className="settings-card column auth-card">
       <label>Account</label>
       <h3>Sign in with Google</h3>
-      <p className="muted">On the first import, YTM Desktop copies your existing Brave Google session into its own local auth profile. Some Windows/Brave builds lock the cookie database while Brave is running, so you may need to close Brave once and retry. After that successful import, normal Brave is no longer touched and future sign-ins reuse YTM Desktop's saved Brave auth profile.</p>
+      <p className="muted">YTM Desktop now opens your real Brave profile instead of a copied profile, so your existing Google accounts remain available. Close Brave completely before starting sign-in so a temporary local sign-in bridge can load when Brave starts. The bridge only passes the active YouTube Music browser session back to YTM Desktop on this PC.</p>
       <div className="auth-actions">
         <button className="install-button auth-signin" onClick={signIn} disabled={loginBusy}>
           {loginBusy ? "Waiting for Brave sign-in…" : status.valid ? "Switch account" : "Sign in with Google"}
@@ -178,7 +178,7 @@ export function SettingsView() {
       <div className="update-head">
         <div>
           <label>App updates</label>
-          <h3>YTM Desktop {update?.currentVersion || "0.3.0"}</h3>
+          <h3>YTM Desktop {update?.currentVersion || "0.3.1"}</h3>
           <p className="muted updater-subtitle">Stable channel · GitHub Releases</p>
         </div>
         <button className="secondary-button" onClick={checkUpdate} disabled={updateBusy}>
