@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "YTM Desktop",
+  "version": "0.2.6",
+  "identifier": "com.ytmdesktop.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "YTM Desktop",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 860,
+        "minHeight": 560,
+        "decorations": false,
+        "transparent": false,
+        "resizable": true,
+        "center": true,
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
+      },
+      {
+        "label": "mini",
+        "title": "YTM Mini Player",
+        "url": "index.html",
+        "width": 390,
+        "height": 184,
+        "minWidth": 330,
+        "minHeight": 168,
+        "decorations": false,
+        "transparent": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "createUpdaterArtifacts": false
+  }
+}

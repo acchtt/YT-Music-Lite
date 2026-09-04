@@ -1,0 +1,66 @@
+mod commands;
+mod models;
+mod music_service;
+mod playback_resolver;
+mod player;
+mod update_service;
+
+use std::fs;
+use tauri::Manager;
+
+use music_service::MusicServiceState;
+use playback_resolver::PlaybackResolverState;
+use player::PlayerState;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .manage(MusicServiceState::default())
+        .manage(PlaybackResolverState::default())
+        .manage(PlayerState::default())
+        .setup(|app| {
+            let handle = app.handle().clone();
+
+            let resolver = handle.state::<PlaybackResolverState>().inner().clone();
+            let port = tauri::async_runtime::block_on(resolver.start_local_proxy())
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            println!("YTM playback proxy listening on 127.0.0.1:{port}");
+
+            if let Ok(dir) = handle.path().app_config_dir() {
+                let marker = dir.join("auth-path.txt");
+                if let Ok(path) = fs::read_to_string(marker) {
+                    let state = handle.state::<MusicServiceState>();
+                    tauri::async_runtime::block_on(async {
+                        let _ = state.load_without_validation(path.trim().into()).await;
+                    });
+                }
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::auth_status,
+            commands::start_web_login,
+            commands::poll_web_login,
+            commands::configure_auth,
+            commands::clear_auth,
+            commands::get_home,
+            commands::search_music,
+            commands::get_library_playlists,
+            commands::get_library_albums,
+            commands::get_library_artists,
+            commands::get_liked_songs,
+            commands::get_history,
+            commands::get_playlist_tracks,
+            commands::get_lyrics,
+            commands::get_player_state,
+            commands::queue_track,
+            commands::player_control,
+            commands::sync_playback,
+            commands::playback_error,
+            commands::open_mini_player,
+            commands::check_for_updates,
+            commands::install_update,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running YTM Desktop");
+}

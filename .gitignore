@@ -1,0 +1,12 @@
+node_modules/
+dist/
+src-tauri/target/
+.DS_Store
+browser.json
+*.log
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+rustypipe_cache.json
+rustypipe_reports/
+*.key
