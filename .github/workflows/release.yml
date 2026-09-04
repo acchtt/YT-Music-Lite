@@ -3,6 +3,8 @@ name: release-windows
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - "app-v*"
 
@@ -45,9 +47,24 @@ jobs:
           Write-Host "Release installer: $($installer.Name)"
           Write-Host "SHA-256: $hash"
 
+      - name: Determine release tag
+        id: release_meta
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+          } else {
+            $package = Get-Content package.json -Raw | ConvertFrom-Json
+            $tag = "app-v$($package.version)"
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Publishing release $tag"
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
