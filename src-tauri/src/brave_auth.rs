@@ -271,9 +271,9 @@ fn write_bridge_extension(app: &AppHandle, port: u16, token: &str) -> Result<Pat
         r#"const ENDPOINT = {endpoint_js};
 
 async function sendYouTubeSession() {{
-  const cookies = await chrome.cookies.getAll({{ url: \"https://music.youtube.com/\" }});
+  const cookies = await chrome.cookies.getAll({{ url: "https://music.youtube.com/" }});
   const authenticated = cookies.some(
-    (cookie) => cookie.name === \"__Secure-3PAPISID\" || cookie.name === \"SAPISID\"
+    (cookie) => cookie.name === "__Secure-3PAPISID" || cookie.name === "SAPISID"
   );
 
   if (!authenticated) {{
@@ -282,12 +282,12 @@ async function sendYouTubeSession() {{
 
   const cookieHeader = cookies
     .map((cookie) => `${{cookie.name}}=${{cookie.value}}`)
-    .join(\"; \");
+    .join("; ");
 
   try {{
     await fetch(ENDPOINT, {{
-      method: \"POST\",
-      headers: {{ \"Content-Type\": \"text/plain;charset=UTF-8\" }},
+      method: "POST",
+      headers: {{ "Content-Type": "text/plain;charset=UTF-8" }},
       body: cookieHeader
     }});
   }} catch (_) {{
@@ -298,7 +298,7 @@ async function sendYouTubeSession() {{
 }}
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {{
-  if (!message || message.type !== \"ytm-desktop-capture\") {{
+  if (!message || message.type !== "ytm-desktop-capture") {{
     return;
   }}
 
@@ -311,7 +311,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {{
     );
 
     let content = r#"function captureYtmSession() {
-  chrome.runtime.sendMessage({ type: \"ytm-desktop-capture\" }).catch(() => {});
+  chrome.runtime.sendMessage({ type: "ytm-desktop-capture" }).catch(() => {});
 }
 
 captureYtmSession();
