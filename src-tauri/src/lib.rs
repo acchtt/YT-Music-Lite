@@ -1,3 +1,4 @@
+mod brave_auth;
 mod commands;
 mod models;
 mod music_service;
@@ -39,6 +40,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::auth_status,
+            brave_auth::start_brave_login,
+            brave_auth::poll_brave_login,
             commands::start_web_login,
             commands::poll_web_login,
             commands::configure_auth,
