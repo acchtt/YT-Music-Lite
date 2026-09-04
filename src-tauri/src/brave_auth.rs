@@ -37,6 +37,10 @@ fn brave_auth_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(profile)
 }
 
+fn auth_profile_marker(auth_root: &Path) -> PathBuf {
+    auth_root.join("ytm-auth-profile.txt")
+}
+
 fn normal_brave_user_data() -> Result<PathBuf, String> {
     let local = env::var("LOCALAPPDATA")
         .map_err(|_| "LOCALAPPDATA is unavailable, so the Brave profile could not be located.".to_string())?;
@@ -78,6 +82,23 @@ fn profile_name_from_local_state(root: &Path) -> String {
         .and_then(Value::as_str)
         .and_then(safe_profile_name)
         .unwrap_or_else(|| "Default".to_string())
+}
+
+fn saved_auth_profile(auth_root: &Path) -> Option<String> {
+    let name = fs::read_to_string(auth_profile_marker(auth_root))
+        .ok()
+        .and_then(|raw| safe_profile_name(&raw))?;
+
+    let cookies = auth_root
+        .join(&name)
+        .join("Network")
+        .join("Cookies");
+
+    if cookies.is_file() {
+        Some(name)
+    } else {
+        None
+    }
 }
 
 fn copy_file_read_write(source: &Path, destination: &Path, required: bool) -> Result<(), String> {
@@ -131,25 +152,30 @@ fn snapshot_sqlite_database(source: &Path, destination: &Path) -> Result<(), Str
     }
     remove_sqlite_sidecars(destination);
 
-    // Opening SQLite read-only is different from copying the database file on
-    // Windows. SQLite cooperates with Brave's WAL/locking protocol and the
-    // online backup API takes a consistent snapshot while Brave remains open.
+    // Some Brave/Windows combinations allow an online read-only backup while
+    // Brave is running; others hold an OS-level exclusive handle. When that
+    // happens we fail with a clear one-time-import instruction instead of
+    // repeatedly trying to bypass the browser's lock.
     let source_db = Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|e| format!("Could not open Brave's live cookie database: {e}"))?;
+        .map_err(|e| {
+            format!(
+                "Brave is currently protecting its cookie database, so YTM Desktop cannot import your existing Google login yet. Close ALL Brave windows, wait a few seconds for Brave background processes to exit, then click Sign in with Google again. This is only required for the first import; after it succeeds YTM Desktop keeps its own saved Brave auth profile and will not read your normal Brave cookie database again. Technical detail: {e}"
+            )
+        })?;
     source_db
         .busy_timeout(Duration::from_secs(8))
-        .map_err(|e| format!("Could not configure Brave cookie snapshot: {e}"))?;
+        .map_err(|e| format!("Could not configure Brave cookie import: {e}"))?;
 
     let mut destination_db = Connection::open(destination)
-        .map_err(|e| format!("Could not create YTM Desktop's temporary Brave cookie database: {e}"))?;
+        .map_err(|e| format!("Could not create YTM Desktop's Brave auth cookie database: {e}"))?;
 
     let backup = Backup::new(&source_db, &mut destination_db)
-        .map_err(|e| format!("Could not start the live Brave cookie snapshot: {e}"))?;
+        .map_err(|e| format!("Could not start the Brave cookie import: {e}"))?;
     backup
         .run_to_completion(128, Duration::from_millis(25), None)
         .map_err(|e| {
             format!(
-                "Could not snapshot Brave's live cookie database while Brave is running: {e}. If Brave is updating or shutting down, wait a few seconds and try again."
+                "Brave's cookie database is still busy. Close ALL Brave windows, wait a few seconds, then click Sign in with Google again. This is only needed for the first import. Technical detail: {e}"
             )
         })?;
 
@@ -175,8 +201,6 @@ fn seed_auth_profile_from_existing_brave(auth_root: &Path) -> Result<String, Str
         let _ = fs::remove_file(auth_root.join(stale));
     }
 
-    // Local State contains Brave's local encryption metadata. We copy it on the
-    // same Windows account and still use Brave itself to decrypt the cookie data.
     copy_file_read_write(&source_local_state, &auth_root.join("Local State"), true)?;
 
     let destination_profile = auth_root.join(&profile_name);
@@ -187,8 +211,6 @@ fn seed_auth_profile_from_existing_brave(auth_root: &Path) -> Result<String, Str
         &destination_profile.join("Network").join("Cookies"),
     )?;
 
-    // These are cosmetic/profile hints rather than authentication-critical.
-    // If Brave is rewriting either file, do not block login on them.
     let _ = copy_file_read_write(
         &source_profile.join("Preferences"),
         &destination_profile.join("Preferences"),
@@ -199,6 +221,11 @@ fn seed_auth_profile_from_existing_brave(auth_root: &Path) -> Result<String, Str
         &destination_profile.join("Secure Preferences"),
         false,
     );
+
+    // The marker is written only after the cookie import completed. From this
+    // point onward the normal Brave profile is no longer needed for sign-in.
+    fs::write(auth_profile_marker(auth_root), profile_name.as_bytes())
+        .map_err(|e| format!("Could not save YTM Desktop's Brave auth profile marker: {e}"))?;
 
     Ok(profile_name)
 }
@@ -335,9 +362,17 @@ pub async fn start(app: &AppHandle) -> Result<(), String> {
     let auth_root = brave_auth_root(app)?;
 
     if endpoint_alive(&auth_root).await {
-        let profile_name = profile_name_from_local_state(&auth_root);
+        let profile_name = saved_auth_profile(&auth_root)
+            .unwrap_or_else(|| profile_name_from_local_state(&auth_root));
         launch_brave(&exe, &auth_root, &profile_name)?;
         return Ok(());
+    }
+
+    // Once a first import succeeded, never touch the user's normal Brave profile
+    // again. This avoids Windows' live cookie-database lock on every later login.
+    if let Some(profile_name) = saved_auth_profile(&auth_root) {
+        launch_brave(&exe, &auth_root, &profile_name)?;
+        return wait_for_devtools(auth_root).await;
     }
 
     let profile_name = tauri::async_runtime::spawn_blocking({
