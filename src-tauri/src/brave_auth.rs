@@ -22,7 +22,7 @@ use tokio::sync::Mutex;
 
 use crate::{models::AuthStatus, music_service::MusicServiceState};
 
-const YTM_URL: &str = "https://music.youtube.com/";
+const GOOGLE_ACCOUNT_CHOOSER_URL: &str = "https://accounts.google.com/AccountChooser?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -267,8 +267,8 @@ fn write_bridge_extension(app: &AppHandle, port: u16, token: &str) -> Result<Pat
     let manifest = json!({
         "manifest_version": 3,
         "name": "YTM Desktop Sign-in Bridge",
-        "version": "1.1.0",
-        "description": "Transfers only the YouTube Music account explicitly selected by the user to YTM Desktop on this PC.",
+        "version": "1.2.0",
+        "description": "Completes the YouTube Music handoff for the Google account selected by the user.",
         "permissions": ["cookies"],
         "host_permissions": [
             "https://music.youtube.com/*",
@@ -346,7 +346,7 @@ async function sendYouTubeSession(message) {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || message.type !== "ytm-desktop-capture-selected-account") {
+  if (!message || message.type !== "ytm-desktop-auto-capture-account") {
     return;
   }
 
@@ -388,121 +388,104 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   publishAccountContext();
-  window.setInterval(publishAccountContext, 750);
+  window.setInterval(publishAccountContext, 500);
   window.addEventListener("yt-navigate-finish", publishAccountContext);
 })();
 "#;
 
     let content = r#"(() => {
   let accountContext = { authUser: null, pageId: null };
+  let capturedKey = null;
+  let sending = false;
+  let retryTimer = null;
+
+  function installStatusToast(text) {
+    let toast = document.getElementById("ytm-desktop-signin-status");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "ytm-desktop-signin-status";
+      toast.style.cssText = [
+        "position:fixed",
+        "right:20px",
+        "bottom:20px",
+        "z-index:2147483647",
+        "padding:12px 15px",
+        "border-radius:12px",
+        "background:rgba(20,20,20,.96)",
+        "color:#fff",
+        "font:600 14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif",
+        "box-shadow:0 12px 40px rgba(0,0,0,.45)",
+        "border:1px solid rgba(255,255,255,.14)"
+      ].join(";");
+      document.documentElement.appendChild(toast);
+    }
+    toast.textContent = text;
+  }
+
+  function scheduleCapture(delay = 150) {
+    if (retryTimer !== null) {
+      window.clearTimeout(retryTimer);
+    }
+    retryTimer = window.setTimeout(captureSelectedGoogleAccount, delay);
+  }
+
+  async function captureSelectedGoogleAccount() {
+    if (sending || !accountContext.authUser) return;
+
+    const key = `${accountContext.authUser}|${accountContext.pageId || ""}`;
+    if (capturedKey === key) return;
+
+    sending = true;
+    installStatusToast("Connecting the Google account you selected…");
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: "ytm-desktop-auto-capture-account",
+        authUser: accountContext.authUser,
+        pageId: accountContext.pageId
+      });
+
+      if (response && response.captured) {
+        capturedKey = key;
+        installStatusToast("Connected to YTM Desktop. You can return to the app.");
+        return;
+      }
+
+      if (response && response.reason === "not-signed-in") {
+        installStatusToast("Finishing Google sign-in…");
+      } else {
+        installStatusToast("Waiting for the YouTube Music session…");
+      }
+    } catch (_) {
+      installStatusToast("Waiting for YTM Desktop…");
+    } finally {
+      sending = false;
+    }
+
+    scheduleCapture(1000);
+  }
 
   window.addEventListener("message", (event) => {
     if (event.source !== window || !event.data || event.data.source !== "ytm-desktop-account-context") {
       return;
     }
 
-    accountContext = {
+    const next = {
       authUser: typeof event.data.authUser === "string" ? event.data.authUser : null,
       pageId: typeof event.data.pageId === "string" ? event.data.pageId : null
     };
-    refreshButtonState();
+
+    const changed = next.authUser !== accountContext.authUser || next.pageId !== accountContext.pageId;
+    accountContext = next;
+
+    if (changed && accountContext.authUser) {
+      capturedKey = null;
+      scheduleCapture();
+    }
   });
 
-  function refreshButtonState() {
-    const button = document.getElementById("ytm-desktop-connect-account");
-    const hint = document.getElementById("ytm-desktop-account-hint");
-    if (!button || !hint) return;
-
-    const ready = !!accountContext.authUser;
-    button.disabled = !ready;
-    button.textContent = ready ? "Connect this account" : "Detecting active account…";
-    hint.textContent = ready
-      ? "Switch accounts in YouTube Music if needed. When the correct account is visible, click below."
-      : "Waiting for YouTube Music to expose the active account…";
-  }
-
-  async function connectSelectedAccount() {
-    const button = document.getElementById("ytm-desktop-connect-account");
-    const hint = document.getElementById("ytm-desktop-account-hint");
-    if (!button || !hint || !accountContext.authUser) return;
-
-    button.disabled = true;
-    button.textContent = "Connecting…";
-
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: "ytm-desktop-capture-selected-account",
-        authUser: accountContext.authUser,
-        pageId: accountContext.pageId
-      });
-
-      if (response && response.captured) {
-        hint.textContent = "Session sent to YTM Desktop. This Brave window can stay open.";
-        button.textContent = "Sent";
-        return;
-      }
-
-      hint.textContent = response && response.reason === "not-signed-in"
-        ? "This YouTube Music page is not signed in yet. Sign in or switch account, then try again."
-        : "Could not send this account to YTM Desktop. Try again.";
-    } catch (_) {
-      hint.textContent = "Could not reach YTM Desktop. Return to the app and start sign-in again.";
-    }
-
-    button.disabled = false;
-    button.textContent = "Connect this account";
-  }
-
-  function installPanel() {
-    if (document.getElementById("ytm-desktop-account-panel")) return;
-
-    const panel = document.createElement("div");
-    panel.id = "ytm-desktop-account-panel";
-    panel.style.cssText = [
-      "position:fixed",
-      "right:20px",
-      "bottom:20px",
-      "z-index:2147483647",
-      "width:320px",
-      "padding:16px",
-      "border-radius:14px",
-      "background:rgba(20,20,20,.96)",
-      "color:#fff",
-      "font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif",
-      "box-shadow:0 12px 40px rgba(0,0,0,.45)",
-      "border:1px solid rgba(255,255,255,.14)"
-    ].join(";");
-
-    const title = document.createElement("div");
-    title.textContent = "YTM Desktop sign-in";
-    title.style.cssText = "font-weight:700;font-size:15px;margin-bottom:6px";
-
-    const hint = document.createElement("div");
-    hint.id = "ytm-desktop-account-hint";
-    hint.style.cssText = "opacity:.78;margin-bottom:12px";
-
-    const button = document.createElement("button");
-    button.id = "ytm-desktop-connect-account";
-    button.type = "button";
-    button.style.cssText = [
-      "width:100%",
-      "border:0",
-      "border-radius:10px",
-      "padding:10px 12px",
-      "font:600 14px system-ui,-apple-system,Segoe UI,sans-serif",
-      "cursor:pointer",
-      "background:#fff",
-      "color:#111"
-    ].join(";");
-    button.addEventListener("click", connectSelectedAccount);
-
-    panel.append(title, hint, button);
-    document.documentElement.appendChild(panel);
-    refreshButtonState();
-  }
-
-  installPanel();
-  window.setInterval(installPanel, 1500);
+  installStatusToast("Finishing YTM Desktop sign-in…");
+  scheduleCapture(400);
 })();
 "#;
 
@@ -527,7 +510,7 @@ fn launch_brave_with_existing_profile(
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
         .arg("--new-window")
-        .arg(YTM_URL)
+        .arg(GOOGLE_ACCOUNT_CHOOSER_URL)
         .spawn()
         .map_err(|e| format!("Could not start Brave: {e}"))?;
 
@@ -539,7 +522,7 @@ async fn start(app: &AppHandle, bridge: BraveAuthBridgeState) -> Result<(), Stri
 
     if brave_is_running() {
         return Err(
-            "Close Brave completely before starting Google sign-in, then click Sign in with Google again. YTM Desktop opens your real Brave profile and loads a temporary local account-selection bridge."
+            "Close Brave completely before starting Google sign-in, then click Sign in with Google again. YTM Desktop opens Google's account chooser in your real Brave profile and loads a temporary local sign-in bridge for the final YouTube Music handoff."
                 .to_string(),
         );
     }
@@ -604,7 +587,7 @@ pub async fn poll_brave_login(
         }
         Err(error) => {
             eprintln!(
-                "Selected Brave/YouTube Music account was not ready: authuser={} page_id={:?}: {}",
+                "Google-selected YouTube Music account was not ready: authuser={} page_id={:?}: {}",
                 captured.auth_user,
                 captured.page_id,
                 error
