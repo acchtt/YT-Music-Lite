@@ -1,6 +1,6 @@
 [package]
 name = "ytm_desktop_option3"
-version = "0.2.7"
+version = "0.2.8"
 description = "Custom standalone YouTube Music desktop client"
 authors = ["YTM Desktop"]
 edition = "2021"
