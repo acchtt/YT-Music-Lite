@@ -32,11 +32,139 @@ fn managed_auth_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("ytm-session.json"))
 }
 
-fn brave_profile_dir(app: &AppHandle) -> Result<PathBuf, String> {
+fn brave_auth_root(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let profile = dir.join("brave-auth-profile");
     fs::create_dir_all(&profile).map_err(|e| e.to_string())?;
     Ok(profile)
+}
+
+fn normal_brave_user_data() -> Result<PathBuf, String> {
+    let local = env::var("LOCALAPPDATA")
+        .map_err(|_| "LOCALAPPDATA is unavailable, so the Brave profile could not be located.".to_string())?;
+    let root = Path::new(&local)
+        .join("BraveSoftware")
+        .join("Brave-Browser")
+        .join("User Data");
+    if root.is_dir() {
+        Ok(root)
+    } else {
+        Err(format!(
+            "Your Brave profile was not found at {}.",
+            root.display()
+        ))
+    }
+}
+
+fn safe_profile_name(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty()
+        || value == "."
+        || value == ".."
+        || value.contains('\\')
+        || value.contains('/')
+    {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
+fn profile_name_from_local_state(root: &Path) -> String {
+    let path = root.join("Local State");
+    let parsed = fs::read_to_string(path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
+
+    parsed
+        .as_ref()
+        .and_then(|value| value.get("profile"))
+        .and_then(|value| value.get("last_used"))
+        .and_then(Value::as_str)
+        .and_then(safe_profile_name)
+        .unwrap_or_else(|| "Default".to_string())
+}
+
+fn copy_with_retry(source: &Path, destination: &Path, required: bool) -> Result<(), String> {
+    if !source.exists() {
+        if required {
+            return Err(format!("Required Brave profile file is missing: {}", source.display()));
+        }
+        return Ok(());
+    }
+
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+
+    let mut last_error = None;
+    for _ in 0..10 {
+        match fs::copy(source, destination) {
+            Ok(_) => return Ok(()),
+            Err(error) => {
+                last_error = Some(error);
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+    }
+
+    let error = last_error
+        .map(|e| e.to_string())
+        .unwrap_or_else(|| "unknown copy error".to_string());
+    Err(format!(
+        "Could not copy Brave session data from {}: {error}",
+        source.display()
+    ))
+}
+
+fn seed_auth_profile_from_existing_brave(auth_root: &Path) -> Result<String, String> {
+    let source_root = normal_brave_user_data()?;
+    let source_local_state = source_root.join("Local State");
+    let mut profile_name = profile_name_from_local_state(&source_root);
+    let mut source_profile = source_root.join(&profile_name);
+
+    if !source_profile.is_dir() {
+        profile_name = "Default".to_string();
+        source_profile = source_root.join(&profile_name);
+    }
+
+    if !source_profile.is_dir() {
+        return Err("No usable Brave profile was found. Open Brave once, then try again.".to_string());
+    }
+
+    fs::create_dir_all(auth_root).map_err(|e| e.to_string())?;
+    let _ = fs::remove_file(auth_root.join("DevToolsActivePort"));
+
+    // Copy Brave's Local State because it carries the local encryption metadata
+    // required for the copied cookie database to remain readable on this PC.
+    copy_with_retry(&source_local_state, &auth_root.join("Local State"), true)?;
+
+    let destination_profile = auth_root.join(&profile_name);
+    fs::create_dir_all(destination_profile.join("Network")).map_err(|e| e.to_string())?;
+
+    // Cookies are the important part. Journal/WAL files are copied too so a
+    // live Brave profile can be snapshotted without requiring the user's normal
+    // browser to be closed first.
+    let files = [
+        ("Network/Cookies", true),
+        ("Network/Cookies-journal", false),
+        ("Network/Cookies-wal", false),
+        ("Network/Cookies-shm", false),
+        ("Preferences", false),
+        ("Secure Preferences", false),
+        ("Web Data", false),
+        ("Web Data-journal", false),
+    ];
+
+    for (relative, required) in files {
+        copy_with_retry(
+            &source_profile.join(relative),
+            &destination_profile.join(relative),
+            required,
+        )?;
+    }
+
+    Ok(profile_name)
 }
 
 fn find_brave() -> Result<PathBuf, String> {
@@ -137,13 +265,15 @@ async fn endpoint_alive(profile: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn launch_brave(exe: &Path, profile: &Path) -> Result<(), String> {
+fn launch_brave(exe: &Path, auth_root: &Path, profile_name: &str) -> Result<(), String> {
     Command::new(exe)
-        .arg(format!("--user-data-dir={}", profile.display()))
+        .arg(format!("--user-data-dir={}", auth_root.display()))
+        .arg(format!("--profile-directory={profile_name}"))
         .arg("--remote-debugging-address=127.0.0.1")
         .arg("--remote-debugging-port=0")
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
+        .arg("--disable-background-mode")
         .arg("--new-window")
         .arg(YTM_URL)
         .spawn()
@@ -162,7 +292,7 @@ async fn wait_for_devtools(profile: PathBuf) -> Result<(), String> {
             thread::sleep(Duration::from_millis(150));
         }
         Err(
-            "Brave opened, but YTM Desktop could not connect to the sign-in session. Close the Brave auth window and try again."
+            "Brave opened, but YTM Desktop could not connect to the sign-in session. Close the YTM auth Brave window and try again."
                 .to_string(),
         )
     })
@@ -172,17 +302,17 @@ async fn wait_for_devtools(profile: PathBuf) -> Result<(), String> {
 
 pub async fn start(app: &AppHandle) -> Result<(), String> {
     let exe = find_brave()?;
-    let profile = brave_profile_dir(app)?;
+    let auth_root = brave_auth_root(app)?;
 
-    if endpoint_alive(&profile).await {
-        launch_brave(&exe, &profile)?;
+    if endpoint_alive(&auth_root).await {
+        let profile_name = profile_name_from_local_state(&auth_root);
+        launch_brave(&exe, &auth_root, &profile_name)?;
         return Ok(());
     }
 
-    let _ = fs::remove_file(profile.join("DevToolsActivePort"));
-
-    launch_brave(&exe, &profile)?;
-    wait_for_devtools(profile).await
+    let profile_name = seed_auth_profile_from_existing_brave(&auth_root)?;
+    launch_brave(&exe, &auth_root, &profile_name)?;
+    wait_for_devtools(auth_root).await
 }
 
 fn domain_matches_music_youtube(domain: &str) -> bool {
@@ -193,7 +323,7 @@ fn domain_matches_music_youtube(domain: &str) -> bool {
 }
 
 async fn cdp_command(app: &AppHandle, method: &str) -> Result<Option<Value>, String> {
-    let profile = brave_profile_dir(app)?;
+    let profile = brave_auth_root(app)?;
     let Some((port, browser_path)) = read_devtools_endpoint(&profile)? else {
         return Ok(None);
     };
