@@ -10,7 +10,6 @@ export function SettingsView() {
   const [busy, setBusy] = useState(false);
   const [loginBusy, setLoginBusy] = useState(false);
   const [loginMessage, setLoginMessage] = useState("");
-
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
@@ -28,7 +27,7 @@ export function SettingsView() {
       .catch((e) => setUpdate({
         configured: true,
         available: false,
-        currentVersion: "0.3.2",
+        currentVersion: "0.3.3",
         message: String(e)
       }));
 
@@ -39,20 +38,22 @@ export function SettingsView() {
   useEffect(() => {
     if (!loginBusy) return;
     let cancelled = false;
+
     const timer = window.setInterval(async () => {
       try {
         const result = await api.pollWebLogin();
         if (cancelled || !result) return;
         setStatus(result);
         if (result.sourcePath) setPath(result.sourcePath);
-        setLoginMessage("Connected to the YouTube Music account you selected in Brave.");
+        setLoginMessage("Connected to the Google account you selected.");
         setLoginBusy(false);
       } catch (e) {
         if (cancelled) return;
         setLoginMessage(String(e));
         setLoginBusy(false);
       }
-    }, 1500);
+    }, 1200);
+
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -64,7 +65,7 @@ export function SettingsView() {
     setLoginBusy(true);
     try {
       await api.startWebLogin();
-      setLoginMessage("Your normal Brave profile opened. Switch to the exact YouTube Music account you want, then use the YTM Desktop panel in Brave and click ‘Connect this account’. The app no longer guesses between Google accounts.");
+      setLoginMessage("Google's account chooser opened in Brave. Pick the account you want; YTM Desktop will finish the YouTube Music handoff automatically.");
     } catch (e) {
       setLoginBusy(false);
       setLoginMessage(String(e));
@@ -102,7 +103,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: false,
-        currentVersion: prev?.currentVersion || "0.3.2",
+        currentVersion: prev?.currentVersion || "0.3.3",
         source: prev?.source,
         message: String(e)
       }));
@@ -120,7 +121,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: prev?.available ?? false,
-        currentVersion: prev?.currentVersion || "0.3.2",
+        currentVersion: prev?.currentVersion || "0.3.3",
         version: prev?.version,
         notes: prev?.notes,
         publishedAt: prev?.publishedAt,
@@ -156,10 +157,10 @@ export function SettingsView() {
     <div className="settings-card column auth-card">
       <label>Account</label>
       <h3>Sign in with Google</h3>
-      <p className="muted">YTM Desktop opens your real Brave profile. Close Brave completely before starting sign-in so the temporary local bridge can load. In Brave, switch to the exact YouTube Music account/channel you want, then click <b>Connect this account</b> in the YTM Desktop panel. The bridge sends that page's active account index and delegated YouTube channel ID instead of trying accounts in numerical order.</p>
+      <p className="muted">YTM Desktop opens Google's normal account chooser in your real Brave profile. Pick the Google account you want. Google then redirects briefly to YouTube Music so the app can capture that exact active session automatically; there is no extra “Connect this account” step. Close Brave completely before starting so the temporary local handoff bridge can load.</p>
       <div className="auth-actions">
         <button className="install-button auth-signin" onClick={signIn} disabled={loginBusy}>
-          {loginBusy ? "Waiting for account selection…" : status.valid ? "Switch account" : "Sign in with Google"}
+          {loginBusy ? "Waiting for Google sign-in…" : status.valid ? "Switch account" : "Sign in with Google"}
         </button>
         {loginMessage && <span className="channel-message">{loginMessage}</span>}
       </div>
@@ -178,7 +179,7 @@ export function SettingsView() {
       <div className="update-head">
         <div>
           <label>App updates</label>
-          <h3>YTM Desktop {update?.currentVersion || "0.3.2"}</h3>
+          <h3>YTM Desktop {update?.currentVersion || "0.3.3"}</h3>
           <p className="muted updater-subtitle">Stable channel · GitHub Releases</p>
         </div>
         <button className="secondary-button" onClick={checkUpdate} disabled={updateBusy}>
@@ -210,7 +211,6 @@ export function SettingsView() {
       </div>}
 
       {progress?.finished && <p className="update-available">Update verified. YTM Desktop will close, install the update, and relaunch the installed app.</p>}
-
       {update?.source && <p className="update-source">Release source: {update.source}</p>}
     </div>
   </div>;
