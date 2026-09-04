@@ -1,22 +1,38 @@
 use std::{
-    collections::BTreeMap,
     env,
     fs,
     path::{Path, PathBuf},
     process::Command,
-    thread,
-    time::{Duration, Instant},
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
-use futures_util::{SinkExt, StreamExt};
-use rusqlite::{backup::Backup, Connection, OpenFlags};
-use serde_json::{json, Value};
-use tauri::{AppHandle, Manager, State};
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use axum::{
+    body::Bytes,
+    extract::{Path as AxumPath, State as AxumState},
+    http::StatusCode,
+    routing::post,
+    Router,
+};
+use serde_json::json;
+use sha2::{Digest, Sha256};
+use tauri::{AppHandle, Manager, State as TauriState};
+use tokio::sync::Mutex;
 
 use crate::{models::AuthStatus, music_service::MusicServiceState};
 
 const YTM_URL: &str = "https://music.youtube.com/";
+
+#[derive(Clone, Default)]
+pub struct BraveAuthBridgeState {
+    captured_cookie: Arc<Mutex<Option<String>>>,
+}
+
+#[derive(Clone)]
+struct BridgeServerState {
+    token: String,
+    bridge: BraveAuthBridgeState,
+}
 
 fn config_marker(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
@@ -30,15 +46,11 @@ fn managed_auth_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("ytm-session.json"))
 }
 
-fn brave_auth_root(app: &AppHandle) -> Result<PathBuf, String> {
+fn bridge_extension_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    let profile = dir.join("brave-auth-profile");
-    fs::create_dir_all(&profile).map_err(|e| e.to_string())?;
-    Ok(profile)
-}
-
-fn auth_profile_marker(auth_root: &Path) -> PathBuf {
-    auth_root.join("ytm-auth-profile.txt")
+    let extension = dir.join("brave-signin-bridge");
+    fs::create_dir_all(&extension).map_err(|e| e.to_string())?;
+    Ok(extension)
 }
 
 fn normal_brave_user_data() -> Result<PathBuf, String> {
@@ -48,6 +60,7 @@ fn normal_brave_user_data() -> Result<PathBuf, String> {
         .join("BraveSoftware")
         .join("Brave-Browser")
         .join("User Data");
+
     if root.is_dir() {
         Ok(root)
     } else {
@@ -73,161 +86,15 @@ fn profile_name_from_local_state(root: &Path) -> String {
     let path = root.join("Local State");
     let parsed = fs::read_to_string(path)
         .ok()
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
 
     parsed
         .as_ref()
         .and_then(|value| value.get("profile"))
         .and_then(|value| value.get("last_used"))
-        .and_then(Value::as_str)
+        .and_then(serde_json::Value::as_str)
         .and_then(safe_profile_name)
         .unwrap_or_else(|| "Default".to_string())
-}
-
-fn saved_auth_profile(auth_root: &Path) -> Option<String> {
-    let name = fs::read_to_string(auth_profile_marker(auth_root))
-        .ok()
-        .and_then(|raw| safe_profile_name(&raw))?;
-
-    let cookies = auth_root
-        .join(&name)
-        .join("Network")
-        .join("Cookies");
-
-    if cookies.is_file() {
-        Some(name)
-    } else {
-        None
-    }
-}
-
-fn copy_file_read_write(source: &Path, destination: &Path, required: bool) -> Result<(), String> {
-    if !source.exists() {
-        if required {
-            return Err(format!("Required Brave profile file is missing: {}", source.display()));
-        }
-        return Ok(());
-    }
-
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-
-    let mut last_error = None;
-    for _ in 0..20 {
-        match fs::read(source).and_then(|bytes| fs::write(destination, bytes)) {
-            Ok(_) => return Ok(()),
-            Err(error) => {
-                last_error = Some(error);
-                thread::sleep(Duration::from_millis(75));
-            }
-        }
-    }
-
-    if required {
-        let error = last_error
-            .map(|e| e.to_string())
-            .unwrap_or_else(|| "unknown read error".to_string());
-        Err(format!("Could not read Brave session metadata from {}: {error}", source.display()))
-    } else {
-        Ok(())
-    }
-}
-
-fn remove_sqlite_sidecars(path: &Path) {
-    let _ = fs::remove_file(path);
-    let raw = path.to_string_lossy();
-    let _ = fs::remove_file(PathBuf::from(format!("{raw}-wal")));
-    let _ = fs::remove_file(PathBuf::from(format!("{raw}-shm")));
-    let _ = fs::remove_file(PathBuf::from(format!("{raw}-journal")));
-}
-
-fn snapshot_sqlite_database(source: &Path, destination: &Path) -> Result<(), String> {
-    if !source.is_file() {
-        return Err(format!("Brave cookie database is missing: {}", source.display()));
-    }
-
-    if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    remove_sqlite_sidecars(destination);
-
-    // Some Brave/Windows combinations allow an online read-only backup while
-    // Brave is running; others hold an OS-level exclusive handle. When that
-    // happens we fail with a clear one-time-import instruction instead of
-    // repeatedly trying to bypass the browser's lock.
-    let source_db = Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|e| {
-            format!(
-                "Brave is currently protecting its cookie database, so YTM Desktop cannot import your existing Google login yet. Close ALL Brave windows, wait a few seconds for Brave background processes to exit, then click Sign in with Google again. This is only required for the first import; after it succeeds YTM Desktop keeps its own saved Brave auth profile and will not read your normal Brave cookie database again. Technical detail: {e}"
-            )
-        })?;
-    source_db
-        .busy_timeout(Duration::from_secs(8))
-        .map_err(|e| format!("Could not configure Brave cookie import: {e}"))?;
-
-    let mut destination_db = Connection::open(destination)
-        .map_err(|e| format!("Could not create YTM Desktop's Brave auth cookie database: {e}"))?;
-
-    let backup = Backup::new(&source_db, &mut destination_db)
-        .map_err(|e| format!("Could not start the Brave cookie import: {e}"))?;
-    backup
-        .run_to_completion(128, Duration::from_millis(25), None)
-        .map_err(|e| {
-            format!(
-                "Brave's cookie database is still busy. Close ALL Brave windows, wait a few seconds, then click Sign in with Google again. This is only needed for the first import. Technical detail: {e}"
-            )
-        })?;
-
-    Ok(())
-}
-
-fn seed_auth_profile_from_existing_brave(auth_root: &Path) -> Result<String, String> {
-    let source_root = normal_brave_user_data()?;
-    let source_local_state = source_root.join("Local State");
-    let mut profile_name = profile_name_from_local_state(&source_root);
-    let mut source_profile = source_root.join(&profile_name);
-
-    if !source_profile.is_dir() {
-        profile_name = "Default".to_string();
-        source_profile = source_root.join(&profile_name);
-    }
-    if !source_profile.is_dir() {
-        return Err("No usable Brave profile was found. Open Brave once, then try again.".to_string());
-    }
-
-    fs::create_dir_all(auth_root).map_err(|e| e.to_string())?;
-    for stale in ["DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"] {
-        let _ = fs::remove_file(auth_root.join(stale));
-    }
-
-    copy_file_read_write(&source_local_state, &auth_root.join("Local State"), true)?;
-
-    let destination_profile = auth_root.join(&profile_name);
-    fs::create_dir_all(destination_profile.join("Network")).map_err(|e| e.to_string())?;
-
-    snapshot_sqlite_database(
-        &source_profile.join("Network").join("Cookies"),
-        &destination_profile.join("Network").join("Cookies"),
-    )?;
-
-    let _ = copy_file_read_write(
-        &source_profile.join("Preferences"),
-        &destination_profile.join("Preferences"),
-        false,
-    );
-    let _ = copy_file_read_write(
-        &source_profile.join("Secure Preferences"),
-        &destination_profile.join("Secure Preferences"),
-        false,
-    );
-
-    // The marker is written only after the cookie import completed. From this
-    // point onward the normal Brave profile is no longer needed for sign-in.
-    fs::write(auth_profile_marker(auth_root), profile_name.as_bytes())
-        .map_err(|e| format!("Could not save YTM Desktop's Brave auth profile marker: {e}"))?;
-
-    Ok(profile_name)
 }
 
 fn find_brave() -> Result<PathBuf, String> {
@@ -283,57 +150,192 @@ fn find_brave() -> Result<PathBuf, String> {
     Err("Brave Browser was not found. Install Brave, then try Sign in with Google again.".to_string())
 }
 
-fn read_devtools_endpoint(profile: &Path) -> Result<Option<(u16, String)>, String> {
-    let active_port = profile.join("DevToolsActivePort");
-    let raw = match fs::read_to_string(active_port) {
-        Ok(raw) => raw,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e.to_string()),
-    };
+#[cfg(target_os = "windows")]
+fn brave_is_running() -> bool {
+    let output = Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq brave.exe", "/FO", "CSV", "/NH"])
+        .output();
 
-    let mut lines = raw.lines();
-    let port = match lines.next().and_then(|v| v.trim().parse::<u16>().ok()) {
-        Some(port) => port,
-        None => return Ok(None),
-    };
-    let path = match lines.next().map(str::trim).filter(|v| !v.is_empty()) {
-        Some(path) => path.to_string(),
-        None => return Ok(None),
-    };
-
-    Ok(Some((port, path)))
+    match output {
+        Ok(output) => String::from_utf8_lossy(&output.stdout)
+            .to_ascii_lowercase()
+            .contains("\"brave.exe\""),
+        Err(_) => false,
+    }
 }
 
-async fn endpoint_alive(profile: &Path) -> bool {
-    let Some((port, _)) = read_devtools_endpoint(profile).ok().flatten() else {
-        return false;
+#[cfg(not(target_os = "windows"))]
+fn brave_is_running() -> bool {
+    false
+}
+
+fn bridge_token() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let mut hasher = Sha256::new();
+    hasher.update(std::process::id().to_le_bytes());
+    hasher.update(now.to_le_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+async fn capture_cookie(
+    AxumPath(token): AxumPath<String>,
+    AxumState(state): AxumState<BridgeServerState>,
+    body: Bytes,
+) -> StatusCode {
+    if token != state.token {
+        return StatusCode::FORBIDDEN;
+    }
+
+    let cookie = match String::from_utf8(body.to_vec()) {
+        Ok(cookie) => cookie,
+        Err(_) => return StatusCode::BAD_REQUEST,
     };
 
-    let client = match reqwest::Client::builder()
-        .timeout(Duration::from_secs(1))
-        .build()
+    if cookie.len() > 128 * 1024
+        || (!cookie.contains("__Secure-3PAPISID=") && !cookie.contains("SAPISID="))
     {
-        Ok(client) => client,
-        Err(_) => return false,
-    };
+        return StatusCode::BAD_REQUEST;
+    }
 
-    client
-        .get(format!("http://127.0.0.1:{port}/json/version"))
-        .send()
-        .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
+    *state.bridge.captured_cookie.lock().await = Some(cookie);
+    StatusCode::NO_CONTENT
 }
 
-fn launch_brave(exe: &Path, auth_root: &Path, profile_name: &str) -> Result<(), String> {
+async fn start_bridge_server(bridge: BraveAuthBridgeState) -> Result<(u16, String), String> {
+    *bridge.captured_cookie.lock().await = None;
+
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .map_err(|e| format!("Could not start the local Brave sign-in bridge: {e}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("Could not read the Brave sign-in bridge port: {e}"))?
+        .port();
+
+    let token = bridge_token();
+    let state = BridgeServerState {
+        token: token.clone(),
+        bridge,
+    };
+
+    let router = Router::new()
+        .route("/capture/{token}", post(capture_cookie))
+        .with_state(state);
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = axum::serve(listener, router).await {
+            eprintln!("Brave sign-in bridge stopped: {error}");
+        }
+    });
+
+    Ok((port, token))
+}
+
+fn write_bridge_extension(app: &AppHandle, port: u16, token: &str) -> Result<PathBuf, String> {
+    let dir = bridge_extension_dir(app)?;
+
+    let manifest = json!({
+        "manifest_version": 3,
+        "name": "YTM Desktop Sign-in Bridge",
+        "version": "1.0.0",
+        "description": "Transfers only the active YouTube Music browser session to YTM Desktop on this PC.",
+        "permissions": ["cookies"],
+        "host_permissions": [
+            "https://music.youtube.com/*",
+            "https://*.youtube.com/*",
+            "http://127.0.0.1/*"
+        ],
+        "background": {
+            "service_worker": "background.js"
+        },
+        "content_scripts": [{
+            "matches": ["https://music.youtube.com/*"],
+            "js": ["content.js"],
+            "run_at": "document_idle"
+        }]
+    });
+
+    fs::write(
+        dir.join("manifest.json"),
+        serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| format!("Could not write the Brave bridge manifest: {e}"))?;
+
+    let endpoint = format!("http://127.0.0.1:{port}/capture/{token}");
+    let endpoint_js = serde_json::to_string(&endpoint).map_err(|e| e.to_string())?;
+
+    let background = format!(
+        r#"const ENDPOINT = {endpoint_js};
+
+async function sendYouTubeSession() {{
+  const cookies = await chrome.cookies.getAll({{ url: \"https://music.youtube.com/\" }});
+  const authenticated = cookies.some(
+    (cookie) => cookie.name === \"__Secure-3PAPISID\" || cookie.name === \"SAPISID\"
+  );
+
+  if (!authenticated) {{
+    return false;
+  }}
+
+  const cookieHeader = cookies
+    .map((cookie) => `${{cookie.name}}=${{cookie.value}}`)
+    .join(\"; \");
+
+  try {{
+    await fetch(ENDPOINT, {{
+      method: \"POST\",
+      headers: {{ \"Content-Type\": \"text/plain;charset=UTF-8\" }},
+      body: cookieHeader
+    }});
+  }} catch (_) {{
+    // The local bridge may close after capture. The POST itself is what matters.
+  }}
+
+  return true;
+}}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {{
+  if (!message || message.type !== \"ytm-desktop-capture\") {{
+    return;
+  }}
+
+  sendYouTubeSession()
+    .then((captured) => sendResponse({{ captured }}))
+    .catch(() => sendResponse({{ captured: false }}));
+  return true;
+}});
+"#
+    );
+
+    let content = r#"function captureYtmSession() {
+  chrome.runtime.sendMessage({ type: \"ytm-desktop-capture\" }).catch(() => {});
+}
+
+captureYtmSession();
+window.setInterval(captureYtmSession, 1500);
+"#;
+
+    fs::write(dir.join("background.js"), background)
+        .map_err(|e| format!("Could not write the Brave bridge background script: {e}"))?;
+    fs::write(dir.join("content.js"), content)
+        .map_err(|e| format!("Could not write the Brave bridge content script: {e}"))?;
+
+    Ok(dir)
+}
+
+fn launch_brave_with_existing_profile(
+    exe: &Path,
+    profile_name: &str,
+    extension_dir: &Path,
+) -> Result<(), String> {
     Command::new(exe)
-        .arg(format!("--user-data-dir={}", auth_root.display()))
         .arg(format!("--profile-directory={profile_name}"))
-        .arg("--remote-debugging-address=127.0.0.1")
-        .arg("--remote-debugging-port=0")
+        .arg(format!("--load-extension={}", extension_dir.display()))
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
-        .arg("--disable-background-mode")
         .arg("--new-window")
         .arg(YTM_URL)
         .spawn()
@@ -342,149 +344,49 @@ fn launch_brave(exe: &Path, auth_root: &Path, profile_name: &str) -> Result<(), 
     Ok(())
 }
 
-async fn wait_for_devtools(profile: PathBuf) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let started = Instant::now();
-        while started.elapsed() < Duration::from_secs(12) {
-            if read_devtools_endpoint(&profile)?.is_some() {
-                return Ok(());
-            }
-            thread::sleep(Duration::from_millis(150));
-        }
-        Err("Brave opened, but YTM Desktop could not connect to the sign-in session. Close the YTM auth Brave window and try again.".to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-pub async fn start(app: &AppHandle) -> Result<(), String> {
+async fn start(app: &AppHandle, bridge: BraveAuthBridgeState) -> Result<(), String> {
     let exe = find_brave()?;
-    let auth_root = brave_auth_root(app)?;
 
-    if endpoint_alive(&auth_root).await {
-        let profile_name = saved_auth_profile(&auth_root)
-            .unwrap_or_else(|| profile_name_from_local_state(&auth_root));
-        launch_brave(&exe, &auth_root, &profile_name)?;
-        return Ok(());
+    if brave_is_running() {
+        return Err(
+            "Close Brave completely before starting Google sign-in, then click Sign in with Google again. YTM Desktop now opens your REAL Brave profile so your existing Google accounts are available. Brave must be closed briefly so the temporary sign-in bridge can load into that profile; after YTM Desktop connects, you can use Brave normally."
+                .to_string(),
+        );
     }
 
-    // Once a first import succeeded, never touch the user's normal Brave profile
-    // again. This avoids Windows' live cookie-database lock on every later login.
-    if let Some(profile_name) = saved_auth_profile(&auth_root) {
-        launch_brave(&exe, &auth_root, &profile_name)?;
-        return wait_for_devtools(auth_root).await;
+    let user_data = normal_brave_user_data()?;
+    let profile_name = profile_name_from_local_state(&user_data);
+    let profile_dir = user_data.join(&profile_name);
+
+    if !profile_dir.is_dir() {
+        return Err(format!(
+            "Brave profile '{}' was not found at {}.",
+            profile_name,
+            profile_dir.display()
+        ));
     }
 
-    let profile_name = tauri::async_runtime::spawn_blocking({
-        let auth_root = auth_root.clone();
-        move || seed_auth_profile_from_existing_brave(&auth_root)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
-
-    launch_brave(&exe, &auth_root, &profile_name)?;
-    wait_for_devtools(auth_root).await
-}
-
-fn domain_matches_music_youtube(domain: &str) -> bool {
-    let normalized = domain.trim_start_matches('.').to_ascii_lowercase();
-    normalized == "music.youtube.com"
-        || normalized == "youtube.com"
-        || "music.youtube.com".ends_with(&format!(".{normalized}"))
-}
-
-async fn cdp_command(app: &AppHandle, method: &str) -> Result<Option<Value>, String> {
-    let profile = brave_auth_root(app)?;
-    let Some((port, browser_path)) = read_devtools_endpoint(&profile)? else {
-        return Ok(None);
-    };
-
-    let ws_url = format!("ws://127.0.0.1:{port}{browser_path}");
-    let (mut socket, _) = match connect_async(ws_url.as_str()).await {
-        Ok(connection) => connection,
-        Err(_) => return Ok(None),
-    };
-
-    let request = json!({"id": 1, "method": method});
-    socket
-        .send(Message::Text(request.to_string().into()))
-        .await
-        .map_err(|e| e.to_string())?;
-
-    while let Some(message) = socket.next().await {
-        let message = message.map_err(|e| e.to_string())?;
-        if !message.is_text() {
-            continue;
-        }
-
-        let text = message.into_text().map_err(|e| e.to_string())?.to_string();
-        let value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-        if value.get("id").and_then(Value::as_i64) == Some(1) {
-            return Ok(Some(value));
-        }
-    }
-
-    Ok(None)
-}
-
-async fn music_cookie_header(app: &AppHandle) -> Result<Option<String>, String> {
-    let Some(response) = cdp_command(app, "Storage.getCookies").await? else {
-        return Ok(None);
-    };
-
-    let Some(cookies) = response
-        .get("result")
-        .and_then(|v| v.get("cookies"))
-        .and_then(Value::as_array)
-    else {
-        return Ok(None);
-    };
-
-    let mut jar = BTreeMap::<String, String>::new();
-
-    for cookie in cookies {
-        let Some(name) = cookie.get("name").and_then(Value::as_str) else {
-            continue;
-        };
-        let Some(value) = cookie.get("value").and_then(Value::as_str) else {
-            continue;
-        };
-        let Some(domain) = cookie.get("domain").and_then(Value::as_str) else {
-            continue;
-        };
-
-        if domain_matches_music_youtube(domain) {
-            jar.insert(name.to_string(), value.to_string());
-        }
-    }
-
-    if !jar.contains_key("__Secure-3PAPISID") && !jar.contains_key("SAPISID") {
-        return Ok(None);
-    }
-
-    Ok(Some(
-        jar.into_iter()
-            .map(|(name, value)| format!("{name}={value}"))
-            .collect::<Vec<_>>()
-            .join("; "),
-    ))
-}
-
-async fn close_auth_browser(app: &AppHandle) {
-    let _ = cdp_command(app, "Browser.close").await;
+    let (port, token) = start_bridge_server(bridge).await?;
+    let extension_dir = write_bridge_extension(app, port, &token)?;
+    launch_brave_with_existing_profile(&exe, &profile_name, &extension_dir)
 }
 
 #[tauri::command]
-pub async fn start_brave_login(app: AppHandle) -> Result<(), String> {
-    start(&app).await
+pub async fn start_brave_login(
+    app: AppHandle,
+    bridge: TauriState<'_, BraveAuthBridgeState>,
+) -> Result<(), String> {
+    start(&app, bridge.inner().clone()).await
 }
 
 #[tauri::command]
 pub async fn poll_brave_login(
     app: AppHandle,
-    music: State<'_, MusicServiceState>,
+    music: TauriState<'_, MusicServiceState>,
+    bridge: TauriState<'_, BraveAuthBridgeState>,
 ) -> Result<Option<AuthStatus>, String> {
-    let Some(cookie_header) = music_cookie_header(&app).await? else {
+    let cookie_header = bridge.captured_cookie.lock().await.clone();
+    let Some(cookie_header) = cookie_header else {
         return Ok(None);
     };
 
@@ -505,7 +407,7 @@ pub async fn poll_brave_login(
                 fs::write(&path, raw.as_bytes()).map_err(|e| e.to_string())?;
                 fs::write(config_marker(&app)?, path.to_string_lossy().as_bytes())
                     .map_err(|e| e.to_string())?;
-                close_auth_browser(&app).await;
+                *bridge.captured_cookie.lock().await = None;
                 return Ok(Some(status));
             }
             Err(error) => {
