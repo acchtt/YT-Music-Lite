@@ -45,7 +45,7 @@ export function SettingsView() {
         if (cancelled || !result) return;
         setStatus(result);
         if (result.sourcePath) setPath(result.sourcePath);
-        setLoginMessage("Signed in successfully.");
+        setLoginMessage("Signed in successfully. Brave can now be closed.");
         setLoginBusy(false);
       } catch (e) {
         if (cancelled) return;
@@ -64,7 +64,7 @@ export function SettingsView() {
     setLoginBusy(true);
     try {
       await api.startWebLogin();
-      setLoginMessage("Finish signing in in the YouTube Music window. This page will connect automatically.");
+      setLoginMessage("Brave opened. Sign in to YouTube Music there; YTM Desktop will connect automatically.");
     } catch (e) {
       setLoginBusy(false);
       setLoginMessage(String(e));
@@ -156,10 +156,10 @@ export function SettingsView() {
     <div className="settings-card column auth-card">
       <label>Account</label>
       <h3>Sign in with Google</h3>
-      <p className="muted">YTM Desktop opens a temporary YouTube Music sign-in window, keeps the resulting session locally, then closes the login window automatically.</p>
+      <p className="muted">YTM Desktop opens Brave for Google/YouTube Music sign-in. The app reads only the YouTube Music session from that dedicated Brave auth profile, stores it locally, and closes the auth browser after a successful connection.</p>
       <div className="auth-actions">
         <button className="install-button auth-signin" onClick={signIn} disabled={loginBusy}>
-          {loginBusy ? "Waiting for sign-in…" : status.valid ? "Switch account" : "Sign in with Google"}
+          {loginBusy ? "Waiting for Brave sign-in…" : status.valid ? "Switch account" : "Sign in with Google"}
         </button>
         {loginMessage && <span className="channel-message">{loginMessage}</span>}
       </div>
