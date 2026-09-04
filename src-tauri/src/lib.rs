@@ -9,6 +9,7 @@ mod update_service;
 use std::fs;
 use tauri::Manager;
 
+use brave_auth::BraveAuthBridgeState;
 use music_service::MusicServiceState;
 use playback_resolver::PlaybackResolverState;
 use player::PlayerState;
@@ -19,6 +20,7 @@ pub fn run() {
         .manage(MusicServiceState::default())
         .manage(PlaybackResolverState::default())
         .manage(PlayerState::default())
+        .manage(BraveAuthBridgeState::default())
         .setup(|app| {
             let handle = app.handle().clone();
 
