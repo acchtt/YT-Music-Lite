@@ -9,14 +9,12 @@ use std::{
 };
 
 use futures_util::{SinkExt, StreamExt};
+use rusqlite::{backup::Backup, Connection, OpenFlags};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use crate::{
-    models::AuthStatus,
-    music_service::MusicServiceState,
-};
+use crate::{models::AuthStatus, music_service::MusicServiceState};
 
 const YTM_URL: &str = "https://music.youtube.com/";
 
@@ -49,10 +47,7 @@ fn normal_brave_user_data() -> Result<PathBuf, String> {
     if root.is_dir() {
         Ok(root)
     } else {
-        Err(format!(
-            "Your Brave profile was not found at {}.",
-            root.display()
-        ))
+        Err(format!("Your Brave profile was not found at {}.", root.display()))
     }
 }
 
@@ -85,7 +80,7 @@ fn profile_name_from_local_state(root: &Path) -> String {
         .unwrap_or_else(|| "Default".to_string())
 }
 
-fn copy_with_retry(source: &Path, destination: &Path, required: bool) -> Result<(), String> {
+fn copy_file_read_write(source: &Path, destination: &Path, required: bool) -> Result<(), String> {
     if !source.exists() {
         if required {
             return Err(format!("Required Brave profile file is missing: {}", source.display()));
@@ -98,23 +93,67 @@ fn copy_with_retry(source: &Path, destination: &Path, required: bool) -> Result<
     }
 
     let mut last_error = None;
-    for _ in 0..10 {
-        match fs::copy(source, destination) {
+    for _ in 0..20 {
+        match fs::read(source).and_then(|bytes| fs::write(destination, bytes)) {
             Ok(_) => return Ok(()),
             Err(error) => {
                 last_error = Some(error);
-                thread::sleep(Duration::from_millis(100));
+                thread::sleep(Duration::from_millis(75));
             }
         }
     }
 
-    let error = last_error
-        .map(|e| e.to_string())
-        .unwrap_or_else(|| "unknown copy error".to_string());
-    Err(format!(
-        "Could not copy Brave session data from {}: {error}",
-        source.display()
-    ))
+    if required {
+        let error = last_error
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "unknown read error".to_string());
+        Err(format!("Could not read Brave session metadata from {}: {error}", source.display()))
+    } else {
+        Ok(())
+    }
+}
+
+fn remove_sqlite_sidecars(path: &Path) {
+    let _ = fs::remove_file(path);
+    let raw = path.to_string_lossy();
+    let _ = fs::remove_file(PathBuf::from(format!("{raw}-wal")));
+    let _ = fs::remove_file(PathBuf::from(format!("{raw}-shm")));
+    let _ = fs::remove_file(PathBuf::from(format!("{raw}-journal")));
+}
+
+fn snapshot_sqlite_database(source: &Path, destination: &Path) -> Result<(), String> {
+    if !source.is_file() {
+        return Err(format!("Brave cookie database is missing: {}", source.display()));
+    }
+
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    remove_sqlite_sidecars(destination);
+
+    // Opening SQLite read-only is different from copying the database file on
+    // Windows. SQLite cooperates with Brave's WAL/locking protocol and the
+    // online backup API takes a consistent snapshot while Brave remains open.
+    let source_db = Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("Could not open Brave's live cookie database: {e}"))?;
+    source_db
+        .busy_timeout(Duration::from_secs(8))
+        .map_err(|e| format!("Could not configure Brave cookie snapshot: {e}"))?;
+
+    let mut destination_db = Connection::open(destination)
+        .map_err(|e| format!("Could not create YTM Desktop's temporary Brave cookie database: {e}"))?;
+
+    let backup = Backup::new(&source_db, &mut destination_db)
+        .map_err(|e| format!("Could not start the live Brave cookie snapshot: {e}"))?;
+    backup
+        .run_to_completion(128, Duration::from_millis(25), None)
+        .map_err(|e| {
+            format!(
+                "Could not snapshot Brave's live cookie database while Brave is running: {e}. If Brave is updating or shutting down, wait a few seconds and try again."
+            )
+        })?;
+
+    Ok(())
 }
 
 fn seed_auth_profile_from_existing_brave(auth_root: &Path) -> Result<String, String> {
@@ -127,42 +166,39 @@ fn seed_auth_profile_from_existing_brave(auth_root: &Path) -> Result<String, Str
         profile_name = "Default".to_string();
         source_profile = source_root.join(&profile_name);
     }
-
     if !source_profile.is_dir() {
         return Err("No usable Brave profile was found. Open Brave once, then try again.".to_string());
     }
 
     fs::create_dir_all(auth_root).map_err(|e| e.to_string())?;
-    let _ = fs::remove_file(auth_root.join("DevToolsActivePort"));
+    for stale in ["DevToolsActivePort", "SingletonLock", "SingletonSocket", "SingletonCookie"] {
+        let _ = fs::remove_file(auth_root.join(stale));
+    }
 
-    // Copy Brave's Local State because it carries the local encryption metadata
-    // required for the copied cookie database to remain readable on this PC.
-    copy_with_retry(&source_local_state, &auth_root.join("Local State"), true)?;
+    // Local State contains Brave's local encryption metadata. We copy it on the
+    // same Windows account and still use Brave itself to decrypt the cookie data.
+    copy_file_read_write(&source_local_state, &auth_root.join("Local State"), true)?;
 
     let destination_profile = auth_root.join(&profile_name);
     fs::create_dir_all(destination_profile.join("Network")).map_err(|e| e.to_string())?;
 
-    // Cookies are the important part. Journal/WAL files are copied too so a
-    // live Brave profile can be snapshotted without requiring the user's normal
-    // browser to be closed first.
-    let files = [
-        ("Network/Cookies", true),
-        ("Network/Cookies-journal", false),
-        ("Network/Cookies-wal", false),
-        ("Network/Cookies-shm", false),
-        ("Preferences", false),
-        ("Secure Preferences", false),
-        ("Web Data", false),
-        ("Web Data-journal", false),
-    ];
+    snapshot_sqlite_database(
+        &source_profile.join("Network").join("Cookies"),
+        &destination_profile.join("Network").join("Cookies"),
+    )?;
 
-    for (relative, required) in files {
-        copy_with_retry(
-            &source_profile.join(relative),
-            &destination_profile.join(relative),
-            required,
-        )?;
-    }
+    // These are cosmetic/profile hints rather than authentication-critical.
+    // If Brave is rewriting either file, do not block login on them.
+    let _ = copy_file_read_write(
+        &source_profile.join("Preferences"),
+        &destination_profile.join("Preferences"),
+        false,
+    );
+    let _ = copy_file_read_write(
+        &source_profile.join("Secure Preferences"),
+        &destination_profile.join("Secure Preferences"),
+        false,
+    );
 
     Ok(profile_name)
 }
@@ -217,10 +253,7 @@ fn find_brave() -> Result<PathBuf, String> {
         }
     }
 
-    Err(
-        "Brave Browser was not found. Install Brave, then try Sign in with Google again."
-            .to_string(),
-    )
+    Err("Brave Browser was not found. Install Brave, then try Sign in with Google again.".to_string())
 }
 
 fn read_devtools_endpoint(profile: &Path) -> Result<Option<(u16, String)>, String> {
@@ -291,10 +324,7 @@ async fn wait_for_devtools(profile: PathBuf) -> Result<(), String> {
             }
             thread::sleep(Duration::from_millis(150));
         }
-        Err(
-            "Brave opened, but YTM Desktop could not connect to the sign-in session. Close the YTM auth Brave window and try again."
-                .to_string(),
-        )
+        Err("Brave opened, but YTM Desktop could not connect to the sign-in session. Close the YTM auth Brave window and try again.".to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -310,7 +340,13 @@ pub async fn start(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let profile_name = seed_auth_profile_from_existing_brave(&auth_root)?;
+    let profile_name = tauri::async_runtime::spawn_blocking({
+        let auth_root = auth_root.clone();
+        move || seed_auth_profile_from_existing_brave(&auth_root)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
     launch_brave(&exe, &auth_root, &profile_name)?;
     wait_for_devtools(auth_root).await
 }
@@ -334,11 +370,7 @@ async fn cdp_command(app: &AppHandle, method: &str) -> Result<Option<Value>, Str
         Err(_) => return Ok(None),
     };
 
-    let request = json!({
-        "id": 1,
-        "method": method
-    });
-
+    let request = json!({"id": 1, "method": method});
     socket
         .send(Message::Text(request.to_string().into()))
         .await
@@ -352,7 +384,6 @@ async fn cdp_command(app: &AppHandle, method: &str) -> Result<Option<Value>, Str
 
         let text = message.into_text().map_err(|e| e.to_string())?.to_string();
         let value: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-
         if value.get("id").and_then(Value::as_i64) == Some(1) {
             return Ok(Some(value));
         }
@@ -439,7 +470,6 @@ pub async fn poll_brave_login(
                 fs::write(&path, raw.as_bytes()).map_err(|e| e.to_string())?;
                 fs::write(config_marker(&app)?, path.to_string_lossy().as_bytes())
                     .map_err(|e| e.to_string())?;
-
                 close_auth_browser(&app).await;
                 return Ok(Some(status));
             }
