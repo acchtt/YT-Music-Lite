@@ -28,7 +28,7 @@ export function SettingsView() {
       .catch((e) => setUpdate({
         configured: true,
         available: false,
-        currentVersion: "0.3.1",
+        currentVersion: "0.3.2",
         message: String(e)
       }));
 
@@ -45,7 +45,7 @@ export function SettingsView() {
         if (cancelled || !result) return;
         setStatus(result);
         if (result.sourcePath) setPath(result.sourcePath);
-        setLoginMessage("Signed in successfully. YTM Desktop saved the YouTube Music session locally; you can keep using Brave normally.");
+        setLoginMessage("Connected to the YouTube Music account you selected in Brave.");
         setLoginBusy(false);
       } catch (e) {
         if (cancelled) return;
@@ -64,7 +64,7 @@ export function SettingsView() {
     setLoginBusy(true);
     try {
       await api.startWebLogin();
-      setLoginMessage("Your normal Brave profile opened. Existing Google accounts should already be there; YTM Desktop will capture only the active YouTube Music session automatically.");
+      setLoginMessage("Your normal Brave profile opened. Switch to the exact YouTube Music account you want, then use the YTM Desktop panel in Brave and click ‘Connect this account’. The app no longer guesses between Google accounts.");
     } catch (e) {
       setLoginBusy(false);
       setLoginMessage(String(e));
@@ -102,7 +102,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: false,
-        currentVersion: prev?.currentVersion || "0.3.1",
+        currentVersion: prev?.currentVersion || "0.3.2",
         source: prev?.source,
         message: String(e)
       }));
@@ -120,7 +120,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: prev?.available ?? false,
-        currentVersion: prev?.currentVersion || "0.3.1",
+        currentVersion: prev?.currentVersion || "0.3.2",
         version: prev?.version,
         notes: prev?.notes,
         publishedAt: prev?.publishedAt,
@@ -156,10 +156,10 @@ export function SettingsView() {
     <div className="settings-card column auth-card">
       <label>Account</label>
       <h3>Sign in with Google</h3>
-      <p className="muted">YTM Desktop now opens your real Brave profile instead of a copied profile, so your existing Google accounts remain available. Close Brave completely before starting sign-in so a temporary local sign-in bridge can load when Brave starts. The bridge only passes the active YouTube Music browser session back to YTM Desktop on this PC.</p>
+      <p className="muted">YTM Desktop opens your real Brave profile. Close Brave completely before starting sign-in so the temporary local bridge can load. In Brave, switch to the exact YouTube Music account/channel you want, then click <b>Connect this account</b> in the YTM Desktop panel. The bridge sends that page's active account index and delegated YouTube channel ID instead of trying accounts in numerical order.</p>
       <div className="auth-actions">
         <button className="install-button auth-signin" onClick={signIn} disabled={loginBusy}>
-          {loginBusy ? "Waiting for Brave sign-in…" : status.valid ? "Switch account" : "Sign in with Google"}
+          {loginBusy ? "Waiting for account selection…" : status.valid ? "Switch account" : "Sign in with Google"}
         </button>
         {loginMessage && <span className="channel-message">{loginMessage}</span>}
       </div>
@@ -178,7 +178,7 @@ export function SettingsView() {
       <div className="update-head">
         <div>
           <label>App updates</label>
-          <h3>YTM Desktop {update?.currentVersion || "0.3.1"}</h3>
+          <h3>YTM Desktop {update?.currentVersion || "0.3.2"}</h3>
           <p className="muted updater-subtitle">Stable channel · GitHub Releases</p>
         </div>
         <button className="secondary-button" onClick={checkUpdate} disabled={updateBusy}>
