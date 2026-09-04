@@ -5,8 +5,8 @@ import type { UpdateStatus } from "../types/update";
 
 export const api = {
   authStatus: () => invoke<AuthStatus>("auth_status"),
-  startWebLogin: () => invoke<void>("start_web_login"),
-  pollWebLogin: () => invoke<AuthStatus | null>("poll_web_login"),
+  startWebLogin: () => invoke<void>("start_brave_login"),
+  pollWebLogin: () => invoke<AuthStatus | null>("poll_brave_login"),
   configureAuth: (path: string) => invoke<AuthStatus>("configure_auth", { path }),
   clearAuth: () => invoke<AuthStatus>("clear_auth"),
   home: () => invoke<HomeSection[]>("get_home"),
