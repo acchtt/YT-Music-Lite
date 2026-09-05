@@ -1,4 +1,8 @@
-use std::sync::Arc;
+use std::{
+    fs,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use reqwest::{
     header::{ORIGIN, REFERER, USER_AGENT},
@@ -27,10 +31,73 @@ pub struct PlaybackResolverState {
     http: Client,
 }
 
+fn playback_storage_dir() -> PathBuf {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .or_else(|| std::env::var_os("APPDATA"))
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    base.join("YTM Desktop").join("rustypipe")
+}
+
+fn bundled_botguard_path() -> Option<PathBuf> {
+    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+
+    #[cfg(target_os = "windows")]
+    let names = [
+        "rustypipe-botguard.exe",
+        "rustypipe-botguard-x86_64-pc-windows-msvc.exe",
+    ];
+
+    #[cfg(not(target_os = "windows"))]
+    let names = ["rustypipe-botguard", "rustypipe-botguard-x86_64-unknown-linux-gnu"];
+
+    names
+        .into_iter()
+        .map(|name| exe_dir.join(name))
+        .find(|path| path.is_file())
+}
+
+fn stream_has_po_token(stream_url: &str) -> bool {
+    Url::parse(stream_url)
+        .ok()
+        .is_some_and(|url| {
+            url.query_pairs()
+                .any(|(key, value)| key == "pot" && !value.is_empty())
+        })
+}
+
 impl Default for PlaybackResolverState {
     fn default() -> Self {
+        let storage_dir = playback_storage_dir();
+        if let Err(error) = fs::create_dir_all(&storage_dir) {
+            eprintln!(
+                "Could not create RustyPipe playback cache directory {}: {error}",
+                storage_dir.display()
+            );
+        }
+
+        // rustypipe-botguard generates the PO tokens required by current YouTube
+        // web player streams. The release build bundles it next to the main exe.
+        // po_token_cache reuses the short-lived session token and snapshot data so
+        // starting subsequent tracks is much cheaper than solving BotGuard anew.
+        let mut builder = RustyPipe::builder()
+            .storage_dir(storage_dir.clone())
+            .po_token_cache();
+        if let Some(botguard) = bundled_botguard_path() {
+            builder = builder.botguard_bin(botguard);
+        }
+
+        let client = builder.build().unwrap_or_else(|error| {
+            eprintln!("Could not initialize RustyPipe BotGuard support: {error}");
+            RustyPipe::builder()
+                .storage_dir(storage_dir)
+                .no_botguard()
+                .build()
+                .expect("failed to create fallback RustyPipe client")
+        });
+
         Self {
-            client: RustyPipe::new(),
+            client,
             http: Client::builder()
                 .redirect(reqwest::redirect::Policy::limited(5))
                 .build()
@@ -67,6 +134,8 @@ impl PlaybackResolverState {
         let filter = StreamFilter::new()
             .no_video()
             .audio_codecs(vec![AudioCodec::Mp4a]);
+        let botguard_version = self.client.version_botguard().await;
+        let botguard_label = botguard_version.as_deref().unwrap_or("unavailable");
         let mut failed_client: Option<ClientType> = None;
         let mut failures = Vec::new();
 
@@ -74,9 +143,10 @@ impl PlaybackResolverState {
             let query = self.client.query();
             let mut clients = query.player_client_order().to_vec();
 
-            // If the media URL from one client was rejected, prefer the next
-            // available client on the following attempt. This mirrors RustyPipe's
-            // downloader retry strategy without introducing an ffmpeg dependency.
+            // If the last player/media attempt failed, start with the next client.
+            // With the bundled PO-token helper the normal order begins with Desktop,
+            // followed by iOS/TV fallbacks. Calling one explicit client per attempt
+            // keeps runtime diagnostics honest instead of hiding an internal fallback.
             if let Some(failed) = failed_client {
                 if let Some(index) = clients.iter().position(|client| *client == failed) {
                     let split = index + 1;
@@ -88,13 +158,19 @@ impl PlaybackResolverState {
                 }
             }
 
-            let player = match query.player_from_clients(video_id, &clients).await {
+            let Some(client_type) = clients.first().copied() else {
+                failures.push(format!("attempt {}: RustyPipe exposed no player clients", attempt + 1));
+                break;
+            };
+
+            let player = match query.player_from_client(video_id, client_type).await {
                 Ok(player) => player,
                 Err(error) => {
                     failures.push(format!(
-                        "attempt {} player resolution failed: {error}",
+                        "attempt {} {client_type:?}: player request failed: {error}; botguard={botguard_label}",
                         attempt + 1
                     ));
+                    failed_client = Some(client_type);
                     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                     continue;
                 }
@@ -112,17 +188,17 @@ impl PlaybackResolverState {
             let (_, audio) = player.select_video_audio_stream(&filter);
             let Some(audio) = audio else {
                 failures.push(format!(
-                    "attempt {} {:?}: no non-DRM AAC/M4A stream",
-                    attempt + 1,
-                    player.client_type
+                    "attempt {} {client_type:?}: no non-DRM AAC/M4A stream; botguard={botguard_label}",
+                    attempt + 1
                 ));
-                failed_client = Some(player.client_type);
+                failed_client = Some(client_type);
                 continue;
             };
 
-            let user_agent = query.user_agent(player.client_type).into_owned();
+            let user_agent = query.user_agent(client_type).into_owned();
             let stream_url = audio.url.clone();
             let stream_size = audio.size;
+            let has_po_token = stream_has_po_token(&stream_url);
             let mime = audio.mime.clone();
             let bitrate = audio.average_bitrate;
             let duration_seconds = audio
@@ -130,7 +206,6 @@ impl PlaybackResolverState {
                 .map(|milliseconds| milliseconds as f64 / 1000.0)
                 .unwrap_or(player.details.duration as f64);
             let visitor_data = player.visitor_data.clone();
-            let client_type = player.client_type;
 
             match self
                 .fetch_googlevideo(&stream_url, stream_size, &user_agent)
@@ -146,7 +221,7 @@ impl PlaybackResolverState {
                 }
                 Ok(bytes) => {
                     failures.push(format!(
-                        "attempt {} {client_type:?}: media response was only {} bytes",
+                        "attempt {} {client_type:?}: media response was only {} bytes; size={stream_size}; pot={has_po_token}; botguard={botguard_label}",
                         attempt + 1,
                         bytes.len()
                     ));
@@ -161,14 +236,14 @@ impl PlaybackResolverState {
                         }
                     }
                     failures.push(format!(
-                        "attempt {} {client_type:?}: media HTTP {status}; refreshing player session",
+                        "attempt {} {client_type:?}: media HTTP {status}; size={stream_size}; pot={has_po_token}; botguard={botguard_label}; refreshing player session",
                         attempt + 1
                     ));
                     failed_client = Some(client_type);
                 }
                 Err(error) => {
                     failures.push(format!(
-                        "attempt {} {client_type:?}: {error}",
+                        "attempt {} {client_type:?}: {error}; size={stream_size}; pot={has_po_token}; botguard={botguard_label}",
                         attempt + 1
                     ));
                     failed_client = Some(client_type);
