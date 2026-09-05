@@ -23,6 +23,32 @@ jobs:
         shell: pwsh
         run: .\yt-music-lite\build.ps1
 
+      - name: Main window constructor smoke test
+        shell: pwsh
+        run: |
+          $Root = Resolve-Path .\yt-music-lite
+          $Build = Join-Path $Root "build"
+          $Csc = @(
+            "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
+            "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $Csc) { throw "C# compiler not found" }
+          & $Csc /nologo /target:exe /platform:x64 /langversion:5 `
+            /out:"$Build\YTMusicLite.SmokeTest.exe" `
+            /reference:System.dll `
+            /reference:System.Core.dll `
+            /reference:System.Windows.Forms.dll `
+            /reference:"$Build\YTMusicLite.exe" `
+            (Join-Path $Root "SmokeTest.cs")
+          if ($LASTEXITCODE -ne 0) { throw "Smoke test compilation failed" }
+          Push-Location $Build
+          try {
+            .\YTMusicLite.SmokeTest.exe
+            if ($LASTEXITCODE -ne 0) { throw "MainForm constructor smoke test failed" }
+          } finally {
+            Pop-Location
+          }
+
       - name: Package update
         shell: pwsh
         run: .\yt-music-lite\make-release.ps1
@@ -30,18 +56,16 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.1.0
+          tag_name: ytmlite-v4.1.1
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.1.0
+          name: YT Music Lite v4.1.1
           body: |
-            YT Music Lite v4.1.0
+            YT Music Lite v4.1.1
 
-            - Completely redesigned native shell with cleaner navigation and spacing.
-            - Adds a persistent bottom Now Playing bar with artwork, metadata, seek, transport controls, time, and volume.
-            - Redesigns the always-on-top mini player with rounded corners and custom seek/volume controls.
-            - Moves utility actions into a dedicated Settings panel.
-            - Replaces the permanent Update button with a compact update badge.
-            - Keeps in-app GitHub updates, TLS 1.2 support, tray behavior, sleep mode, and the existing YouTube Music WebView2 profile.
+            - Fixes the 4.1.0 startup crash caused by the new transparent custom seek bars.
+            - Enables transparent-background support before applying transparent colors.
+            - Adds startup crash logging to %LOCALAPPDATA%\YTMusicLite\startup-crash.log.
+            - Keeps the complete 4.1 UI/UX redesign and updater/tray features.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.1.0-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.1.0-win-x64.zip.sha256
+            yt-music-lite/release/YTMusicLite-v4.1.1-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.1.1-win-x64.zip.sha256
