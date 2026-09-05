@@ -1,0 +1,2 @@
+YT Music Lite 4.1.3 release marker.
+Refinement: product-style Settings layout, custom toggle switches, and polished dark tray menu renderer.
