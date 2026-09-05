@@ -13,9 +13,10 @@ namespace YTMusicLiteSmoke
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 using (YTMusicLite.MainForm form = new YTMusicLite.MainForm())
+                using (YTMusicLite.SettingsForm settings = new YTMusicLite.SettingsForm(form))
                 {
                 }
-                Console.WriteLine("MainForm constructor smoke test passed.");
+                Console.WriteLine("MainForm and SettingsForm constructor smoke test passed.");
                 return 0;
             }
             catch (Exception ex)
