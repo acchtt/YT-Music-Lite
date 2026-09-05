@@ -1,6 +1,6 @@
-YT Music Lite v4.0.2
+YT Music Lite v4.1.0
 Base: YTMusicLite-WebView2-Test-v3
 WebView2 SDK: 1.0.4191.47
 Architecture: C# WinForms + WebView2
 Update channel: acchtt/YT-Music-Lite / ytmlite-v*
-Changes: TLS 1.2 updater fix; persistent Minimize to tray option
+Changes: redesigned native shell; bottom Now Playing bar; polished mini player; Settings panel; update badge; persistent tray/close/update preferences
