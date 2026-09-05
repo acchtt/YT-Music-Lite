@@ -151,7 +151,7 @@ impl PlaybackResolverState {
             }
 
             let Some(stream) = choose_stream(&player.audio_streams) else {
-                failures.push(format!("{client_type:?}: no compatible audio stream"));
+                failures.push(format!("{client_type:?}: no WebView2-compatible Opus/WebM or AAC/MP4 audio stream"));
                 continue;
             };
 
@@ -317,15 +317,39 @@ async fn proxy_handler(
 }
 
 fn choose_stream(streams: &[AudioStream]) -> Option<&AudioStream> {
-    // Prefer AAC/MP4 for WebView2. Keep another non-DRM audio format as a fallback.
+    // Chromium/WebView2 decodes Opus in WebM internally and does not need Windows'
+    // optional AAC/Media Foundation components. Prefer it first for maximum compatibility.
+    // AAC/MP4 remains a second choice for systems where WebM is not available.
     streams
         .iter()
-        .filter(|s| s.drm_systems.is_empty() && s.mime.starts_with("audio/mp4"))
+        .filter(|s| {
+            let mime = s.mime.to_ascii_lowercase();
+            s.drm_systems.is_empty()
+                && mime.starts_with("audio/webm")
+                && (mime.contains("opus") || !mime.contains("codecs="))
+        })
         .max_by_key(|s| s.bitrate)
         .or_else(|| {
             streams
                 .iter()
-                .filter(|s| s.drm_systems.is_empty())
+                .filter(|s| s.drm_systems.is_empty() && s.mime.to_ascii_lowercase().starts_with("audio/webm"))
+                .max_by_key(|s| s.bitrate)
+        })
+        .or_else(|| {
+            streams
+                .iter()
+                .filter(|s| {
+                    let mime = s.mime.to_ascii_lowercase();
+                    s.drm_systems.is_empty()
+                        && mime.starts_with("audio/mp4")
+                        && (mime.contains("mp4a") || !mime.contains("codecs="))
+                })
+                .max_by_key(|s| s.bitrate)
+        })
+        .or_else(|| {
+            streams
+                .iter()
+                .filter(|s| s.drm_systems.is_empty() && s.mime.to_ascii_lowercase().starts_with("audio/mp4"))
                 .max_by_key(|s| s.bitrate)
         })
 }
