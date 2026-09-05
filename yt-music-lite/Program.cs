@@ -21,7 +21,7 @@ namespace YTMusicLite
                 MainForm main = new MainForm();
                 WebViewChromeFix.Attach(main);
                 UiPolish.Attach(main);
-                PlayerEnhancements.Attach(main);
+                OfficialPlayerMode.Attach(main);
                 Application.Run(main);
             }
             catch (Exception ex)
