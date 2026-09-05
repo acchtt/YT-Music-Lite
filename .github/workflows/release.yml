@@ -1,5 +1,5 @@
 name: release-windows
-# Release pipeline: 0.3.1 and later
+# Release pipeline: 0.4.0 and later
 
 on:
   workflow_dispatch:
@@ -15,7 +15,6 @@ concurrency:
 
 jobs:
   windows-release:
-    # Main pushes only publish when the commit is explicitly a release commit.
     if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' || startsWith(github.event.head_commit.message, 'Publish YTM Desktop')
     permissions:
       contents: write
@@ -40,32 +39,6 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm install
-
-      - name: Prepare RustyPipe BotGuard sidecar
-        shell: pwsh
-        run: |
-          $version = "0.1.2"
-          $expectedHash = "edb9e482ca77e3e4ecd4a2d3270f58c9169f03770db1568b3429cc8cf4c4b279"
-          $archive = Join-Path $env:RUNNER_TEMP "rustypipe-botguard.zip"
-          $extract = Join-Path $env:RUNNER_TEMP "rustypipe-botguard"
-          $url = "https://codeberg.org/ThetaDev/rustypipe-botguard/releases/download/v$version/rustypipe-botguard-v$version-x86_64-pc-windows-msvc.zip"
-
-          Invoke-WebRequest -Uri $url -OutFile $archive
-          $actualHash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-          if ($actualHash -ne $expectedHash) {
-            throw "rustypipe-botguard checksum mismatch: expected $expectedHash, got $actualHash"
-          }
-
-          if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
-          Expand-Archive -Path $archive -DestinationPath $extract -Force
-          $binary = Get-ChildItem $extract -Recurse -Filter "rustypipe-botguard.exe" | Select-Object -First 1
-          if (-not $binary) { throw "rustypipe-botguard.exe was not found in the verified release archive" }
-
-          New-Item -ItemType Directory -Force "src-tauri/binaries" | Out-Null
-          $sidecar = "src-tauri/binaries/rustypipe-botguard-x86_64-pc-windows-msvc.exe"
-          Copy-Item $binary.FullName $sidecar -Force
-          & $sidecar --version
-          if ($LASTEXITCODE -ne 0) { throw "rustypipe-botguard --version failed" }
 
       - name: Build Windows NSIS installer
         run: npm run tauri:build -- --bundles nsis
