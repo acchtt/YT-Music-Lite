@@ -1,0 +1,2 @@
+YT Music Lite 4.1.4 release marker.
+Refines Settings layout and introduces the new custom vector icon/button system across the native shell.
