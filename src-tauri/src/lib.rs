@@ -2,6 +2,7 @@ mod brave_auth;
 mod commands;
 mod models;
 mod music_service;
+mod native_audio;
 mod playback_resolver;
 mod player;
 mod update_service;
@@ -11,6 +12,7 @@ use tauri::Manager;
 
 use brave_auth::BraveAuthBridgeState;
 use music_service::MusicServiceState;
+use native_audio::NativeAudioState;
 use playback_resolver::PlaybackResolverState;
 use player::PlayerState;
 
@@ -19,15 +21,11 @@ pub fn run() {
     tauri::Builder::default()
         .manage(MusicServiceState::default())
         .manage(PlaybackResolverState::default())
+        .manage(NativeAudioState::default())
         .manage(PlayerState::default())
         .manage(BraveAuthBridgeState::default())
         .setup(|app| {
             let handle = app.handle().clone();
-
-            let resolver = handle.state::<PlaybackResolverState>().inner().clone();
-            let port = tauri::async_runtime::block_on(resolver.start_local_proxy())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            println!("YTM playback proxy listening on 127.0.0.1:{port}");
 
             if let Ok(dir) = handle.path().app_config_dir() {
                 let marker = dir.join("auth-path.txt");
