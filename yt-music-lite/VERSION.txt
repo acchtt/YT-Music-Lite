@@ -1,7 +1,7 @@
-YT Music Lite v4.1.7
+YT Music Lite v4.1.8
 Base: YTMusicLite-WebView2-Test-v3
 WebView2 SDK: 1.0.4191.47
 Architecture: C# WinForms + WebView2
 Update channel: acchtt/YT-Music-Lite / ytmlite-v*
 Release: stable
-Changes: refines the native player controls into coherent left/center/right groups; replaces blocky hover states with circular hit targets; adds subtle active indicators; syncs like/dislike/shuffle/repeat/mute state from YouTube Music; improves responsive behavior and volume placement while preserving the 4.1.6 feature set, 4.1.5 branding and 4.1.4 Settings redesign
+Changes: hides the custom native bottom player bar and restores YouTube Music's official player bar inside the WebView; removes the custom expanded-player layer from startup; preserves the native top shell, logo, mini player, tray, Settings, sleep mode, startup safeguards, and in-app updater
