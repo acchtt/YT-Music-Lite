@@ -19,7 +19,6 @@ namespace YTMusicLite
             Panel playerBar = GetPrivateField<Panel>(main, "playerBar");
             WebView2 web = GetPrivateField<WebView2>(main, "web");
             if (playerBar == null || web == null) return;
-
             PlayerEnhancementController controller = new PlayerEnhancementController(main, playerBar, web);
             controllers.Add(controller);
         }
@@ -32,10 +31,7 @@ namespace YTMusicLite
                 if (field == null) return null;
                 return field.GetValue(instance) as T;
             }
-            catch
-            {
-                return null;
-            }
+            catch { return null; }
         }
 
         private sealed class PlayerEnhancementController
@@ -48,6 +44,7 @@ namespace YTMusicLite
             private readonly PictureBox artwork;
             private readonly Label title;
             private readonly Label artist;
+            private readonly Timer stateSync;
 
             private readonly PlayerFeatureButton like;
             private readonly PlayerFeatureButton dislike;
@@ -65,6 +62,9 @@ namespace YTMusicLite
                 web = webView;
                 tips = new ToolTip();
                 tips.ShowAlways = true;
+                tips.AutoPopDelay = 4500;
+                tips.InitialDelay = 420;
+                tips.ReshowDelay = 80;
 
                 volume = GetPrivateField<SeekBar>(main, "volume");
                 artwork = GetPrivateField<PictureBox>(main, "artwork");
@@ -78,33 +78,25 @@ namespace YTMusicLite
                 repeat = AddButton(PlayerFeatureIcon.Repeat, "Repeat");
                 lyrics = AddButton(PlayerFeatureIcon.Lyrics, "Lyrics");
                 queue = AddButton(PlayerFeatureIcon.Queue, "Queue / Up next");
-                mute = AddButton(PlayerFeatureIcon.Mute, "Mute / Unmute");
+                mute = AddButton(PlayerFeatureIcon.Mute, "Mute");
 
-                like.Click += async delegate
-                {
-                    if (await ClickLikeAsync(false))
-                    {
-                        like.Active = !like.Active;
-                        if (like.Active) dislike.Active = false;
-                    }
-                };
-                dislike.Click += async delegate
-                {
-                    if (await ClickLikeAsync(true))
-                    {
-                        dislike.Active = !dislike.Active;
-                        if (dislike.Active) like.Active = false;
-                    }
-                };
+                like.Click += async delegate { if (await ClickLikeAsync(false)) await DelayedSyncAsync(); };
+                dislike.Click += async delegate { if (await ClickLikeAsync(true)) await DelayedSyncAsync(); };
                 more.Click += async delegate { await ClickMoreAsync(); };
-                shuffle.Click += async delegate { if (await ClickIntentAsync("shuffle")) shuffle.Active = !shuffle.Active; };
-                repeat.Click += async delegate { if (await ClickIntentAsync("repeat")) repeat.Active = !repeat.Active; };
+                shuffle.Click += async delegate { if (await ClickIntentAsync("shuffle")) await DelayedSyncAsync(); };
+                repeat.Click += async delegate { if (await ClickIntentAsync("repeat")) await DelayedSyncAsync(); };
                 lyrics.Click += async delegate { await OpenLyricsAsync(); };
                 queue.Click += async delegate { await ClickIntentAsync("queue"); };
-                mute.Click += async delegate { mute.Active = await ToggleMuteAsync(); };
+                mute.Click += async delegate { await ToggleMuteAsync(); await DelayedSyncAsync(); };
 
                 MakeCurrentTrackClickable();
                 HideLegacyVolumeGlyph();
+
+                stateSync = new Timer();
+                stateSync.Interval = 1200;
+                stateSync.Tick += async delegate { await SyncStateAsync(); };
+                stateSync.Start();
+
                 bar.Resize += delegate { Layout(); };
                 Layout();
             }
@@ -113,9 +105,9 @@ namespace YTMusicLite
             {
                 PlayerFeatureButton button = new PlayerFeatureButton();
                 button.Icon = icon;
-                button.Size = new Size(34, 34);
+                button.Size = new Size(36, 36);
                 button.BackColor = bar.BackColor;
-                button.ForeColor = Color.FromArgb(188, 188, 188);
+                button.ForeColor = Color.FromArgb(174, 174, 174);
                 bar.Controls.Add(button);
                 button.BringToFront();
                 tips.SetToolTip(button, tip);
@@ -151,7 +143,6 @@ namespace YTMusicLite
                 {
                     Label label = control as Label;
                     if (label != null && string.Equals(label.Text, "🔊", StringComparison.Ordinal)) label.Visible = false;
-
                     IconGlyph glyph = control as IconGlyph;
                     if (glyph != null && glyph.Icon == IconKind.Volume) glyph.Visible = false;
                 }
@@ -160,33 +151,47 @@ namespace YTMusicLite
             private void Layout()
             {
                 int width = bar.ClientSize.Width;
-                bool compact = width < 1080;
+                int center = width / 2;
+                bool roomy = width >= 1180;
+                bool medium = width >= 1020;
+                bool compact = width < 920;
 
-                like.Visible = !compact;
-                dislike.Visible = !compact;
+                like.Visible = roomy;
+                dislike.Visible = roomy;
+                more.Visible = medium;
+                lyrics.Visible = roomy;
+                queue.Visible = medium;
+                mute.Visible = true;
                 shuffle.Visible = !compact;
                 repeat.Visible = !compact;
-                lyrics.Visible = !compact;
 
-                like.Location = new Point(342, 14);
-                dislike.Location = new Point(378, 14);
-                more.Location = new Point(compact ? 340 : 414, 14);
+                if (roomy)
+                {
+                    like.Location = new Point(340, 17);
+                    dislike.Location = new Point(378, 17);
+                    more.Location = new Point(416, 17);
+                }
+                else if (medium)
+                {
+                    more.Location = new Point(342, 17);
+                }
 
-                int volumeWidth = compact ? 92 : 112;
-                int volumeX = Math.Max(720, width - volumeWidth - 24);
+                shuffle.Location = new Point(center - 128, 19);
+                repeat.Location = new Point(center + 92, 19);
+
+                int volumeWidth = width >= 1100 ? 116 : 92;
+                int volumeX = Math.Max(center + 180, width - volumeWidth - 22);
                 if (volume != null)
                 {
-                    volume.Location = new Point(volumeX, 34);
+                    volume.Location = new Point(volumeX, 36);
                     volume.Size = new Size(volumeWidth, 18);
                     volume.Anchor = AnchorStyles.Top | AnchorStyles.Right;
                     volume.BringToFront();
                 }
 
-                mute.Location = new Point(volumeX - 38, 26);
-                queue.Location = new Point(volumeX - 76, 26);
-                lyrics.Location = new Point(volumeX - 114, 26);
-                repeat.Location = new Point(volumeX - 152, 26);
-                shuffle.Location = new Point(volumeX - 190, 26);
+                mute.Location = new Point(volumeX - 40, 27);
+                queue.Location = new Point(volumeX - 80, 27);
+                lyrics.Location = new Point(volumeX - 120, 27);
 
                 like.BringToFront();
                 dislike.BringToFront();
@@ -198,13 +203,66 @@ namespace YTMusicLite
                 mute.BringToFront();
             }
 
+            private async Task DelayedSyncAsync()
+            {
+                await Task.Delay(180);
+                await SyncStateAsync();
+            }
+
+            private async Task SyncStateAsync()
+            {
+                if (web.CoreWebView2 == null) return;
+                const string script = @"(() => {
+                    const bar = document.querySelector('ytmusic-player-bar');
+                    const media = document.querySelector('video, audio');
+                    const stateFor = (words, scope) => {
+                        if (!scope) return false;
+                        const nodes = Array.from(scope.querySelectorAll('button, tp-yt-paper-icon-button, yt-icon-button'));
+                        const target = nodes.find(b => {
+                            const cls = typeof b.className === 'string' ? b.className : '';
+                            const s = ((b.getAttribute('aria-label') || '') + ' ' + (b.title || '') + ' ' + cls).toLowerCase();
+                            return words.some(w => s.indexOf(w) >= 0);
+                        });
+                        if (!target) return false;
+                        const pressed = (target.getAttribute('aria-pressed') || '').toLowerCase();
+                        const checked = (target.getAttribute('aria-checked') || '').toLowerCase();
+                        const label = ((target.getAttribute('aria-label') || '') + ' ' + (target.title || '')).toLowerCase();
+                        return pressed === 'true' || checked === 'true' || /(^|\s)(active|selected)(\s|$)/i.test(target.className || '') || label.indexOf('turn off') >= 0 || label.indexOf('disable') >= 0;
+                    };
+                    const likeRenderer = bar ? bar.querySelector('ytmusic-like-button-renderer') : null;
+                    const like = stateFor(['like','thích'], likeRenderer);
+                    const dislike = stateFor(['dislike','không thích'], likeRenderer);
+                    const shuffle = stateFor(['shuffle','ngẫu nhiên','trộn'], bar || document);
+                    const repeat = stateFor(['repeat','lặp'], bar || document);
+                    const muted = !!(media && media.muted);
+                    return [like, dislike, shuffle, repeat, muted].map(v => v ? '1' : '0').join('|');
+                })();";
+
+                try
+                {
+                    string raw = await web.CoreWebView2.ExecuteScriptAsync(script);
+                    if (string.IsNullOrEmpty(raw)) return;
+                    string value = raw.Trim();
+                    if (value.Length >= 2 && value[0] == '"' && value[value.Length - 1] == '"')
+                    {
+                        value = value.Substring(1, value.Length - 2).Replace("\\\"", "\"").Replace("\\\\", "\\");
+                    }
+                    string[] parts = value.Split('|');
+                    if (parts.Length < 5) return;
+                    like.Active = parts[0] == "1";
+                    dislike.Active = parts[1] == "1";
+                    shuffle.Active = parts[2] == "1";
+                    repeat.Active = parts[3] == "1";
+                    mute.Active = parts[4] == "1";
+                    tips.SetToolTip(mute, mute.Active ? "Unmute" : "Mute");
+                }
+                catch { }
+            }
+
             private async Task<bool> ClickLikeAsync(bool negative)
             {
-                string words = negative
-                    ? "['dislike','không thích','not like']"
-                    : "['like','thích']";
+                string words = negative ? "['dislike','không thích','not like']" : "['like','thích']";
                 string fallbackIndex = negative ? "1" : "0";
-
                 string script = @"(() => {
                     const bar = document.querySelector('ytmusic-player-bar');
                     if (!bar) return false;
@@ -245,7 +303,6 @@ namespace YTMusicLite
                 if (intent == "shuffle") words = "['shuffle','ngẫu nhiên','trộn']";
                 else if (intent == "repeat") words = "['repeat','lặp']";
                 else words = "['queue','hàng đợi','up next']";
-
                 string script = @"(() => {
                     const bar = document.querySelector('ytmusic-player-bar');
                     const scope = bar || document;
@@ -287,18 +344,9 @@ namespace YTMusicLite
                     const media = document.querySelector('video, audio');
                     if (!media) return false;
                     media.muted = !media.muted;
-                    return media.muted;
+                    return true;
                 })();";
-                try
-                {
-                    if (web.CoreWebView2 == null) return false;
-                    string raw = await web.CoreWebView2.ExecuteScriptAsync(script);
-                    return string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase);
-                }
-                catch
-                {
-                    return false;
-                }
+                return await ExecuteBooleanAsync(script);
             }
 
             private async Task<bool> ExecuteBooleanAsync(string script)
@@ -309,10 +357,7 @@ namespace YTMusicLite
                     string raw = await web.CoreWebView2.ExecuteScriptAsync(script);
                     return string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase);
                 }
-                catch
-                {
-                    return false;
-                }
+                catch { return false; }
             }
 
             private void OpenCurrentTrack()
@@ -320,15 +365,9 @@ namespace YTMusicLite
                 try
                 {
                     MethodInfo method = main.GetType().GetMethod("OpenCurrentTrack", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                    if (method != null)
-                    {
-                        method.Invoke(main, null);
-                        return;
-                    }
+                    if (method != null) { method.Invoke(main, null); return; }
                 }
-                catch
-                {
-                }
+                catch { }
 
                 try
                 {
@@ -346,9 +385,7 @@ namespace YTMusicLite
                     })();";
                     web.CoreWebView2.ExecuteScriptAsync(script);
                 }
-                catch
-                {
-                }
+                catch { }
             }
         }
     }
@@ -375,7 +412,7 @@ namespace YTMusicLite
         public PlayerFeatureButton()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            Size = new Size(34, 34);
+            Size = new Size(36, 36);
             Cursor = Cursors.Hand;
             TabStop = false;
         }
@@ -389,7 +426,7 @@ namespace YTMusicLite
         public bool Active
         {
             get { return active; }
-            set { active = value; Invalidate(); }
+            set { if (active == value) return; active = value; Invalidate(); }
         }
 
         protected override void OnMouseEnter(EventArgs e) { hovered = true; Invalidate(); base.OnMouseEnter(e); }
@@ -401,27 +438,35 @@ namespace YTMusicLite
         {
             base.OnPaint(e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            Color iconColor = active ? Color.FromArgb(255, 58, 78) : ForeColor;
+            Color iconColor = active ? Color.FromArgb(238, 238, 238) : ForeColor;
+            Color hoverFill = pressed ? Color.FromArgb(45, 45, 45) : Color.FromArgb(31, 31, 31);
 
-            if (hovered || pressed)
+            if (hovered || pressed || active)
             {
-                Rectangle rect = new Rectangle(1, 1, Width - 2, Height - 2);
-                using (GraphicsPath path = RoundedRect(rect, 8))
-                using (SolidBrush brush = new SolidBrush(pressed ? Color.FromArgb(48, 48, 48) : Color.FromArgb(34, 34, 34)))
+                Rectangle rect = new Rectangle(2, 2, Width - 4, Height - 4);
+                using (SolidBrush brush = new SolidBrush(active && !hovered && !pressed ? Color.FromArgb(25, 25, 25) : hoverFill))
                 {
-                    e.Graphics.FillPath(brush, path);
+                    e.Graphics.FillEllipse(brush, rect);
                 }
             }
 
-            Rectangle bounds = new Rectangle((Width - 18) / 2, (Height - 18) / 2, 18, 18);
-            DrawIcon(e.Graphics, icon, bounds, iconColor);
+            Rectangle bounds = new Rectangle((Width - 17) / 2, (Height - 17) / 2 - 1, 17, 17);
+            DrawIcon(e.Graphics, icon, bounds, iconColor, active);
+
+            if (active)
+            {
+                using (SolidBrush accent = new SolidBrush(Color.FromArgb(255, 58, 78)))
+                {
+                    e.Graphics.FillEllipse(accent, Width / 2f - 2f, Height - 5f, 4f, 4f);
+                }
+            }
         }
 
-        private static void DrawIcon(Graphics g, PlayerFeatureIcon kind, Rectangle b, Color color)
+        private static void DrawIcon(Graphics g, PlayerFeatureIcon kind, Rectangle b, Color color, bool active)
         {
             float cx = b.Left + b.Width / 2f;
             float cy = b.Top + b.Height / 2f;
-            using (Pen pen = new Pen(color, 1.7f))
+            using (Pen pen = new Pen(color, 1.55f))
             using (SolidBrush brush = new SolidBrush(color))
             {
                 pen.StartCap = LineCap.Round;
@@ -430,9 +475,9 @@ namespace YTMusicLite
 
                 if (kind == PlayerFeatureIcon.More)
                 {
-                    g.FillEllipse(brush, cx - 7f, cy - 1.5f, 3f, 3f);
-                    g.FillEllipse(brush, cx - 1.5f, cy - 1.5f, 3f, 3f);
-                    g.FillEllipse(brush, cx + 4f, cy - 1.5f, 3f, 3f);
+                    g.FillEllipse(brush, cx - 6.5f, cy - 1.4f, 2.8f, 2.8f);
+                    g.FillEllipse(brush, cx - 1.4f, cy - 1.4f, 2.8f, 2.8f);
+                    g.FillEllipse(brush, cx + 3.7f, cy - 1.4f, 2.8f, 2.8f);
                     return;
                 }
 
@@ -446,87 +491,79 @@ namespace YTMusicLite
                         g.TranslateTransform(-cx, -cy);
                     }
                     PointF[] thumb = new PointF[] {
-                        new PointF(cx - 7f, cy + 1f), new PointF(cx - 3f, cy + 1f),
-                        new PointF(cx, cy - 6f), new PointF(cx + 3f, cy - 6f),
-                        new PointF(cx + 2f, cy - 1f), new PointF(cx + 7f, cy - 1f),
-                        new PointF(cx + 6f, cy + 6f), new PointF(cx - 3f, cy + 6f),
-                        new PointF(cx - 3f, cy + 1f)
+                        new PointF(cx - 6.5f, cy + 1f), new PointF(cx - 2.5f, cy + 1f),
+                        new PointF(cx, cy - 5.8f), new PointF(cx + 2.8f, cy - 5.8f),
+                        new PointF(cx + 2f, cy - 1f), new PointF(cx + 6.5f, cy - 1f),
+                        new PointF(cx + 5.5f, cy + 5.5f), new PointF(cx - 2.5f, cy + 5.5f)
                     };
                     g.DrawLines(pen, thumb);
-                    g.DrawLine(pen, cx - 7f, cy + 1f, cx - 7f, cy + 6f);
-                    g.DrawLine(pen, cx - 7f, cy + 6f, cx - 3f, cy + 6f);
+                    g.DrawLine(pen, cx - 6.5f, cy + 1f, cx - 6.5f, cy + 5.5f);
+                    g.DrawLine(pen, cx - 6.5f, cy + 5.5f, cx - 2.5f, cy + 5.5f);
                     g.Restore(state);
                     return;
                 }
 
                 if (kind == PlayerFeatureIcon.Shuffle)
                 {
-                    g.DrawLine(pen, cx - 7f, cy - 5f, cx - 4f, cy - 5f);
-                    g.DrawBezier(pen, cx - 4f, cy - 5f, cx, cy - 5f, cx + 1f, cy + 5f, cx + 6f, cy + 5f);
-                    g.DrawLine(pen, cx - 7f, cy + 5f, cx - 4f, cy + 5f);
-                    g.DrawBezier(pen, cx - 4f, cy + 5f, cx, cy + 5f, cx + 1f, cy - 5f, cx + 6f, cy - 5f);
-                    g.DrawLine(pen, cx + 3f, cy - 8f, cx + 7f, cy - 5f);
-                    g.DrawLine(pen, cx + 3f, cy - 2f, cx + 7f, cy - 5f);
-                    g.DrawLine(pen, cx + 3f, cy + 2f, cx + 7f, cy + 5f);
-                    g.DrawLine(pen, cx + 3f, cy + 8f, cx + 7f, cy + 5f);
+                    g.DrawLine(pen, cx - 6.5f, cy - 4.5f, cx - 3.8f, cy - 4.5f);
+                    g.DrawBezier(pen, cx - 3.8f, cy - 4.5f, cx, cy - 4.5f, cx + 1f, cy + 4.5f, cx + 5.5f, cy + 4.5f);
+                    g.DrawLine(pen, cx - 6.5f, cy + 4.5f, cx - 3.8f, cy + 4.5f);
+                    g.DrawBezier(pen, cx - 3.8f, cy + 4.5f, cx, cy + 4.5f, cx + 1f, cy - 4.5f, cx + 5.5f, cy - 4.5f);
+                    g.DrawLine(pen, cx + 3f, cy - 7f, cx + 6.5f, cy - 4.5f);
+                    g.DrawLine(pen, cx + 3f, cy - 2f, cx + 6.5f, cy - 4.5f);
+                    g.DrawLine(pen, cx + 3f, cy + 2f, cx + 6.5f, cy + 4.5f);
+                    g.DrawLine(pen, cx + 3f, cy + 7f, cx + 6.5f, cy + 4.5f);
                     return;
                 }
 
                 if (kind == PlayerFeatureIcon.Repeat)
                 {
-                    g.DrawArc(pen, cx - 7f, cy - 6f, 14f, 9f, 190f, 165f);
-                    g.DrawArc(pen, cx - 7f, cy - 3f, 14f, 9f, 10f, 165f);
-                    g.DrawLine(pen, cx + 4f, cy - 7f, cx + 7f, cy - 4f);
-                    g.DrawLine(pen, cx + 7f, cy - 4f, cx + 3f, cy - 3f);
-                    g.DrawLine(pen, cx - 4f, cy + 7f, cx - 7f, cy + 4f);
-                    g.DrawLine(pen, cx - 7f, cy + 4f, cx - 3f, cy + 3f);
+                    g.DrawArc(pen, cx - 6.5f, cy - 5.5f, 13f, 8f, 190f, 165f);
+                    g.DrawArc(pen, cx - 6.5f, cy - 2.5f, 13f, 8f, 10f, 165f);
+                    g.DrawLine(pen, cx + 3.5f, cy - 6.5f, cx + 6.5f, cy - 4f);
+                    g.DrawLine(pen, cx + 6.5f, cy - 4f, cx + 2.8f, cy - 3f);
+                    g.DrawLine(pen, cx - 3.5f, cy + 6.5f, cx - 6.5f, cy + 4f);
+                    g.DrawLine(pen, cx - 6.5f, cy + 4f, cx - 2.8f, cy + 3f);
                     return;
                 }
 
                 if (kind == PlayerFeatureIcon.Lyrics)
                 {
-                    g.DrawLine(pen, cx - 6f, cy - 7f, cx + 6f, cy - 7f);
-                    g.DrawLine(pen, cx - 6f, cy - 2f, cx + 4f, cy - 2f);
-                    g.DrawLine(pen, cx - 6f, cy + 3f, cx + 6f, cy + 3f);
-                    g.DrawLine(pen, cx - 6f, cy + 8f, cx + 1f, cy + 8f);
+                    g.DrawLine(pen, cx - 5.5f, cy - 6f, cx + 5.5f, cy - 6f);
+                    g.DrawLine(pen, cx - 5.5f, cy - 2f, cx + 3.5f, cy - 2f);
+                    g.DrawLine(pen, cx - 5.5f, cy + 2f, cx + 5.5f, cy + 2f);
+                    g.DrawLine(pen, cx - 5.5f, cy + 6f, cx + 1f, cy + 6f);
                     return;
                 }
 
                 if (kind == PlayerFeatureIcon.Queue)
                 {
-                    g.DrawLine(pen, cx - 7f, cy - 5f, cx + 2f, cy - 5f);
-                    g.DrawLine(pen, cx - 7f, cy, cx + 2f, cy);
-                    g.DrawLine(pen, cx - 7f, cy + 5f, cx + 2f, cy + 5f);
-                    g.FillPolygon(brush, new PointF[] {
-                        new PointF(cx + 5f, cy + 1f), new PointF(cx + 5f, cy + 8f), new PointF(cx + 10f, cy + 4.5f)
-                    });
+                    g.DrawLine(pen, cx - 6f, cy - 4.5f, cx + 1f, cy - 4.5f);
+                    g.DrawLine(pen, cx - 6f, cy, cx + 1f, cy);
+                    g.DrawLine(pen, cx - 6f, cy + 4.5f, cx + 1f, cy + 4.5f);
+                    g.FillPolygon(brush, new PointF[] { new PointF(cx + 4f, cy + 1f), new PointF(cx + 4f, cy + 6.5f), new PointF(cx + 8f, cy + 3.75f) });
                     return;
                 }
 
                 if (kind == PlayerFeatureIcon.Mute)
                 {
                     PointF[] speaker = new PointF[] {
-                        new PointF(cx - 8f, cy - 3f), new PointF(cx - 4f, cy - 3f),
-                        new PointF(cx + 1f, cy - 7f), new PointF(cx + 1f, cy + 7f),
-                        new PointF(cx - 4f, cy + 3f), new PointF(cx - 8f, cy + 3f)
+                        new PointF(cx - 7f, cy - 2.5f), new PointF(cx - 3.5f, cy - 2.5f),
+                        new PointF(cx + .5f, cy - 6f), new PointF(cx + .5f, cy + 6f),
+                        new PointF(cx - 3.5f, cy + 2.5f), new PointF(cx - 7f, cy + 2.5f)
                     };
                     g.FillPolygon(brush, speaker);
-                    g.DrawLine(pen, cx + 4f, cy - 5f, cx + 10f, cy + 5f);
-                    g.DrawLine(pen, cx + 10f, cy - 5f, cx + 4f, cy + 5f);
+                    if (active)
+                    {
+                        g.DrawLine(pen, cx + 3.5f, cy - 4.5f, cx + 8.5f, cy + 4.5f);
+                        g.DrawLine(pen, cx + 8.5f, cy - 4.5f, cx + 3.5f, cy + 4.5f);
+                    }
+                    else
+                    {
+                        g.DrawArc(pen, cx - 1f, cy - 4.5f, 9f, 9f, -55f, 110f);
+                    }
                 }
             }
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle rect, int radius)
-        {
-            int d = Math.Max(2, radius * 2);
-            GraphicsPath path = new GraphicsPath();
-            path.AddArc(rect.Left, rect.Top, d, d, 180, 90);
-            path.AddArc(rect.Right - d, rect.Top, d, d, 270, 90);
-            path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
-            path.AddArc(rect.Left, rect.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
         }
     }
 }
