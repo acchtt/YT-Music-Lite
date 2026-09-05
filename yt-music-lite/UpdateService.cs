@@ -13,7 +13,7 @@ namespace YTMusicLite
 {
     public sealed class UpdateService
     {
-        public const string CurrentVersion = "4.0.2";
+        public const string CurrentVersion = "4.1.0";
         public const string RepositoryOwner = "acchtt";
         public const string RepositoryName = "YT-Music-Lite";
         public const string ReleaseTagPrefix = "ytmlite-v";
@@ -123,7 +123,7 @@ namespace YTMusicLite
             string updaterPath = Path.Combine(appDir, "YTMusicLite.Updater.exe");
             if (!File.Exists(updaterPath))
             {
-                throw new FileNotFoundException("YTMusicLite.Updater.exe is missing. Rebuild v4 before using in-app updates.", updaterPath);
+                throw new FileNotFoundException("YTMusicLite.Updater.exe is missing. Rebuild YT Music Lite before using in-app updates.", updaterPath);
             }
 
             string tempUpdaterPath = Path.Combine(tempRoot, "YTMusicLite.Updater.exe");
@@ -227,7 +227,6 @@ namespace YTMusicLite
 
         private static WebClient CreateClient()
         {
-            // Force TLS 1.2 for GitHub on older .NET Framework defaults.
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
 
             WebClient client = new WebClient();
