@@ -52,28 +52,31 @@ namespace YTMusicLite
             if (web == null || web.CoreWebView2 == null) return;
 
             const string script = @"(() => {
-                let style = document.getElementById('ytmlite-native-player-hide');
-                if (!style) {
-                    style = document.createElement('style');
-                    style.id = 'ytmlite-native-player-hide';
-                    document.documentElement.appendChild(style);
-                }
-                style.textContent = `
-                    ytmusic-player-bar,
-                    #player-bar-background {
-                        display: none !important;
-                        visibility: hidden !important;
-                        height: 0 !important;
-                        min-height: 0 !important;
-                        max-height: 0 !important;
-                    }
-                    html,
-                    body,
-                    ytmusic-app,
-                    ytmusic-app-layout {
-                        --ytmusic-player-bar-height: 0px !important;
-                    }
-                `;
+                const oldStyle = document.getElementById('ytmlite-native-player-hide');
+                if (oldStyle) oldStyle.remove();
+
+                const roots = [
+                    document.documentElement,
+                    document.body,
+                    document.querySelector('ytmusic-app'),
+                    document.querySelector('ytmusic-app-layout')
+                ];
+                roots.forEach(node => {
+                    if (!node || !node.style) return;
+                    node.style.removeProperty('--ytmusic-player-bar-height');
+                });
+
+                const bar = document.querySelector('ytmusic-player-bar');
+                const background = document.querySelector('#player-bar-background');
+                [bar, background].forEach(node => {
+                    if (!node || !node.style) return;
+                    node.style.removeProperty('display');
+                    node.style.removeProperty('visibility');
+                    node.style.removeProperty('height');
+                    node.style.removeProperty('min-height');
+                    node.style.removeProperty('max-height');
+                    node.style.removeProperty('opacity');
+                });
             })();";
 
             try
