@@ -1,6 +1,6 @@
-YT Music Lite v4.1.2
+YT Music Lite v4.1.3
 Base: YTMusicLite-WebView2-Test-v3
 WebView2 SDK: 1.0.4191.47
 Architecture: C# WinForms + WebView2
 Update channel: acchtt/YT-Music-Lite / ytmlite-v*
-Changes: hides YouTube Music's built-in bottom player chrome so only the native Now Playing bar is visible; keeps 4.1 UI redesign and startup fixes
+Changes: refined Settings UI with sidebar navigation and toggle switches; polished dark tray menu renderer; preserves native Now Playing bar, hidden YTM chrome, tray behavior, and updater
