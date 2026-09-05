@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -11,14 +12,12 @@ namespace YTMusicLite
         private readonly PictureBox artwork;
         private readonly Label title;
         private readonly Label artist;
-        private readonly Button previous;
-        private readonly Button playPause;
-        private readonly Button next;
-        private readonly Button showMain;
-        private readonly Button close;
-        private readonly TrackBar volume;
+        private readonly LiteButton playPause;
+        private readonly SeekBar progress;
+        private readonly SeekBar volume;
+        private readonly ToolTip tips;
         private string artworkUrl = "";
-        private bool updatingVolume;
+        private bool updating;
 
         [DllImport("user32.dll")]
         private static extern bool ReleaseCapture();
@@ -26,50 +25,60 @@ namespace YTMusicLite
         [DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
+
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteObject(IntPtr handle);
+
         public MiniPlayerForm(MainForm mainForm)
         {
             owner = mainForm;
             Text = "YT Music Lite Mini Player";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
-            Size = new Size(470, 142);
+            Size = new Size(430, 132);
             MinimumSize = Size;
             MaximumSize = Size;
             TopMost = true;
             ShowInTaskbar = false;
             BackColor = Color.FromArgb(18, 18, 18);
             ForeColor = Color.White;
-            Opacity = 0.98;
+            Font = new Font("Segoe UI", 9f, FontStyle.Regular);
+            Opacity = 0.99;
+            tips = new ToolTip();
 
             artwork = new PictureBox();
-            artwork.Location = new Point(10, 10);
-            artwork.Size = new Size(122, 122);
+            artwork.Location = new Point(12, 12);
+            artwork.Size = new Size(108, 108);
             artwork.SizeMode = PictureBoxSizeMode.Zoom;
-            artwork.BackColor = Color.FromArgb(35, 35, 35);
+            artwork.BackColor = Color.FromArgb(31, 31, 31);
             Controls.Add(artwork);
 
             title = new Label();
-            title.Location = new Point(145, 14);
-            title.Size = new Size(267, 23);
+            title.Location = new Point(136, 15);
+            title.Size = new Size(240, 23);
             title.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
             title.AutoEllipsis = true;
             title.Text = "Nothing playing";
             Controls.Add(title);
 
             artist = new Label();
-            artist.Location = new Point(145, 39);
-            artist.Size = new Size(267, 20);
-            artist.Font = new Font("Segoe UI", 9f, FontStyle.Regular);
-            artist.ForeColor = Color.Silver;
+            artist.Location = new Point(136, 39);
+            artist.Size = new Size(240, 19);
+            artist.ForeColor = Color.FromArgb(158, 158, 158);
             artist.AutoEllipsis = true;
             artist.Text = "YouTube Music";
             Controls.Add(artist);
 
-            previous = MakeButton("⏮", 145, 72, 48, 34);
-            playPause = MakeButton("▶", 199, 72, 48, 34);
-            next = MakeButton("⏭", 253, 72, 48, 34);
-            showMain = MakeButton("▣", 307, 72, 48, 34);
-            close = MakeButton("×", 425, 7, 34, 27);
+            LiteButton previous = MakeButton("⏮", 136, 67, 38, 34, "Previous");
+            playPause = MakeButton("▶", 181, 63, 42, 42, "Play / Pause");
+            playPause.BackColor = Color.White;
+            playPause.ForeColor = Color.Black;
+            playPause.FlatAppearance.MouseOverBackColor = Color.FromArgb(230, 230, 230);
+            LiteButton next = MakeButton("⏭", 230, 67, 38, 34, "Next");
+            LiteButton showMain = MakeButton("▣", 276, 67, 38, 34, "Show main window");
+            LiteButton close = MakeButton("×", 391, 7, 30, 28, "Hide mini player");
 
             previous.Click += delegate { owner.PreviousTrack(); };
             playPause.Click += delegate { owner.TogglePlayback(); };
@@ -77,33 +86,41 @@ namespace YTMusicLite
             showMain.Click += delegate { owner.RestoreMainWindow(); };
             close.Click += delegate { Hide(); };
 
-            volume = new TrackBar();
-            volume.Location = new Point(145, 111);
-            volume.Size = new Size(210, 28);
-            volume.Minimum = 0;
-            volume.Maximum = 100;
-            volume.TickStyle = TickStyle.None;
-            volume.Value = 100;
-            volume.BackColor = BackColor;
-            volume.Scroll += delegate
+            progress = new SeekBar();
+            progress.Location = new Point(136, 106);
+            progress.Size = new Size(177, 18);
+            progress.SeekRequested += delegate
             {
-                if (!updatingVolume)
-                {
-                    owner.SetVolume(volume.Value / 100.0);
-                }
+                if (!updating) owner.SeekToRatio(progress.Ratio);
+            };
+            Controls.Add(progress);
+
+            Label volumeIcon = new Label();
+            volumeIcon.Text = "🔊";
+            volumeIcon.TextAlign = ContentAlignment.MiddleCenter;
+            volumeIcon.ForeColor = Color.FromArgb(170, 170, 170);
+            volumeIcon.Location = new Point(320, 103);
+            volumeIcon.Size = new Size(26, 22);
+            Controls.Add(volumeIcon);
+
+            volume = new SeekBar();
+            volume.Location = new Point(346, 106);
+            volume.Size = new Size(72, 18);
+            volume.Ratio = 1;
+            volume.SeekRequested += delegate
+            {
+                if (!updating) owner.SetVolume(volume.Ratio);
             };
             Controls.Add(volume);
-
-            Label volumeLabel = new Label();
-            volumeLabel.Text = "VOL";
-            volumeLabel.Location = new Point(360, 115);
-            volumeLabel.Size = new Size(38, 18);
-            volumeLabel.ForeColor = Color.Gray;
-            Controls.Add(volumeLabel);
 
             MouseDown += DragWindow;
             title.MouseDown += DragWindow;
             artist.MouseDown += DragWindow;
+            artwork.MouseDown += DragWindow;
+
+            SizeChanged += delegate { ApplyRoundedRegion(); };
+            Shown += delegate { ApplyRoundedRegion(); };
+            Paint += DrawBorder;
 
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
@@ -115,20 +132,51 @@ namespace YTMusicLite
             };
         }
 
-        private Button MakeButton(string text, int x, int y, int width, int height)
+        private LiteButton MakeButton(string text, int x, int y, int width, int height, string tip)
         {
-            Button button = new Button();
+            LiteButton button = new LiteButton();
             button.Text = text;
+            button.Font = new Font("Segoe UI Symbol", 11f, FontStyle.Regular);
             button.Location = new Point(x, y);
             button.Size = new Size(width, height);
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderColor = Color.FromArgb(55, 55, 55);
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(55, 55, 55);
-            button.BackColor = Color.FromArgb(32, 32, 32);
-            button.ForeColor = Color.White;
-            button.TabStop = false;
             Controls.Add(button);
+            tips.SetToolTip(button, tip);
             return button;
+        }
+
+        private void ApplyRoundedRegion()
+        {
+            IntPtr region = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, 18, 18);
+            try
+            {
+                Region = Region.FromHrgn(region);
+            }
+            finally
+            {
+                DeleteObject(region);
+            }
+        }
+
+        private void DrawBorder(object sender, PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using (Pen border = new Pen(Color.FromArgb(55, 55, 55), 1f))
+            using (GraphicsPath path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 14))
+            {
+                e.Graphics.DrawPath(border, path);
+            }
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            int d = radius * 2;
+            path.AddArc(bounds.Left, bounds.Top, d, d, 180, 90);
+            path.AddArc(bounds.Right - d, bounds.Top, d, d, 270, 90);
+            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+            path.AddArc(bounds.Left, bounds.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
         }
 
         private void DragWindow(object sender, MouseEventArgs e)
@@ -144,35 +192,28 @@ namespace YTMusicLite
         {
             Rectangle work = Screen.PrimaryScreen.WorkingArea;
             Location = new Point(work.Right - Width - 18, work.Bottom - Height - 18);
-            Show();
+            if (!Visible) Show();
             BringToFront();
+            Activate();
         }
 
         public void UpdatePlayer(PlayerState state)
         {
             if (state == null) return;
-
+            updating = true;
             title.Text = string.IsNullOrWhiteSpace(state.Title) ? "Nothing playing" : state.Title;
             artist.Text = string.IsNullOrWhiteSpace(state.Artist) ? "YouTube Music" : state.Artist;
             playPause.Text = state.Paused ? "▶" : "❚❚";
-
-            int value = (int)Math.Round(state.Volume * 100.0);
-            if (value < 0) value = 0;
-            if (value > 100) value = 100;
-            updatingVolume = true;
-            volume.Value = value;
-            updatingVolume = false;
+            progress.Ratio = state.Duration > 0 ? state.CurrentTime / state.Duration : 0;
+            progress.Interactive = state.Duration > 0;
+            volume.Ratio = state.Volume;
+            updating = false;
 
             if (!string.IsNullOrWhiteSpace(state.ArtworkUrl) && !string.Equals(artworkUrl, state.ArtworkUrl, StringComparison.Ordinal))
             {
                 artworkUrl = state.ArtworkUrl;
-                try
-                {
-                    artwork.LoadAsync(artworkUrl);
-                }
-                catch
-                {
-                }
+                try { artwork.LoadAsync(artworkUrl); }
+                catch { }
             }
         }
     }
