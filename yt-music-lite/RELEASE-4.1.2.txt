@@ -1,0 +1,2 @@
+YT Music Lite 4.1.2 release marker.
+Fix: hide YouTube Music's visible built-in bottom player while keeping its real playback engine active behind the native Now Playing bar.
