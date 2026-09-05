@@ -49,6 +49,7 @@ $Sources = @(
     (Join-Path $Root "SettingsForm.cs"),
     (Join-Path $Root "MiniPlayerForm.cs"),
     (Join-Path $Root "MenuStyler.cs"),
+    (Join-Path $Root "UiPolish.cs"),
     (Join-Path $Root "WebViewChromeFix.cs"),
     (Join-Path $Root "UpdateService.cs"),
     (Join-Path $Root "MainForm.cs")
