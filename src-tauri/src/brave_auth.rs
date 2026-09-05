@@ -22,7 +22,8 @@ use tokio::sync::Mutex;
 
 use crate::{models::AuthStatus, music_service::MusicServiceState};
 
-const GOOGLE_ACCOUNT_CHOOSER_URL: &str = "https://accounts.google.com/AccountChooser?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F";
+const GOOGLE_ACCOUNT_CHOOSER_URL: &str =
+    "https://accounts.google.com/AccountChooser?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F";
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,48 +63,11 @@ fn bridge_extension_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(extension)
 }
 
-fn normal_brave_user_data() -> Result<PathBuf, String> {
-    let local = env::var("LOCALAPPDATA")
-        .map_err(|_| "LOCALAPPDATA is unavailable, so the Brave profile could not be located.".to_string())?;
-    let root = Path::new(&local)
-        .join("BraveSoftware")
-        .join("Brave-Browser")
-        .join("User Data");
-
-    if root.is_dir() {
-        Ok(root)
-    } else {
-        Err(format!("Your Brave profile was not found at {}.", root.display()))
-    }
-}
-
-fn safe_profile_name(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.is_empty()
-        || value == "."
-        || value == ".."
-        || value.contains('\\')
-        || value.contains('/')
-    {
-        None
-    } else {
-        Some(value.to_string())
-    }
-}
-
-fn profile_name_from_local_state(root: &Path) -> String {
-    let path = root.join("Local State");
-    let parsed = fs::read_to_string(path)
-        .ok()
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
-
-    parsed
-        .as_ref()
-        .and_then(|value| value.get("profile"))
-        .and_then(|value| value.get("last_used"))
-        .and_then(Value::as_str)
-        .and_then(safe_profile_name)
-        .unwrap_or_else(|| "Default".to_string())
+fn auth_browser_user_data(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let profile = dir.join("brave-auth-browser");
+    fs::create_dir_all(&profile).map_err(|e| e.to_string())?;
+    Ok(profile)
 }
 
 fn find_brave() -> Result<PathBuf, String> {
@@ -157,25 +121,6 @@ fn find_brave() -> Result<PathBuf, String> {
     }
 
     Err("Brave Browser was not found. Install Brave, then try Sign in with Google again.".to_string())
-}
-
-#[cfg(target_os = "windows")]
-fn brave_is_running() -> bool {
-    let output = Command::new("tasklist")
-        .args(["/FI", "IMAGENAME eq brave.exe", "/FO", "CSV", "/NH"])
-        .output();
-
-    match output {
-        Ok(output) => String::from_utf8_lossy(&output.stdout)
-            .to_ascii_lowercase()
-            .contains("\"brave.exe\""),
-        Err(_) => false,
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn brave_is_running() -> bool {
-    false
 }
 
 fn bridge_token() -> String {
@@ -267,9 +212,9 @@ fn write_bridge_extension(app: &AppHandle, port: u16, token: &str) -> Result<Pat
     let manifest = json!({
         "manifest_version": 3,
         "name": "YTM Desktop Sign-in Bridge",
-        "version": "1.2.0",
-        "description": "Completes the YouTube Music handoff for the Google account selected by the user.",
-        "permissions": ["cookies"],
+        "version": "1.3.0",
+        "description": "Completes Google sign-in for YTM Desktop in its dedicated Brave authentication profile.",
+        "permissions": ["cookies", "tabs"],
         "host_permissions": [
             "https://music.youtube.com/*",
             "https://*.youtube.com/*",
@@ -304,7 +249,7 @@ fn write_bridge_extension(app: &AppHandle, port: u16, token: &str) -> Result<Pat
 
     let background_template = r#"const ENDPOINT = __ENDPOINT__;
 
-async function sendYouTubeSession(message) {
+async function sendYouTubeSession(message, sender) {
   const authUser = typeof message.authUser === "string" ? message.authUser.trim() : "";
   if (!/^\d+$/.test(authUser)) {
     return { captured: false, reason: "account-index-missing" };
@@ -337,20 +282,29 @@ async function sendYouTubeSession(message) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    return response.ok
-      ? { captured: true }
-      : { captured: false, reason: `bridge-${response.status}` };
+
+    if (!response.ok) {
+      return { captured: false, reason: `bridge-${response.status}` };
+    }
+
+    // This is a dedicated YTM Desktop Brave profile. Closing its only auth tab
+    // after capture does not affect the user's normal Brave windows.
+    if (sender && sender.tab && typeof sender.tab.id === "number") {
+      setTimeout(() => chrome.tabs.remove(sender.tab.id).catch(() => {}), 900);
+    }
+
+    return { captured: true };
   } catch (_) {
     return { captured: false, reason: "bridge-unreachable" };
   }
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== "ytm-desktop-auto-capture-account") {
     return;
   }
 
-  sendYouTubeSession(message)
+  sendYouTubeSession(message, sender)
     .then(sendResponse)
     .catch(() => sendResponse({ captured: false, reason: "unexpected-error" }));
   return true;
@@ -399,7 +353,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   let sending = false;
   let retryTimer = null;
 
-  function installStatusToast(text) {
+  function showStatus(text) {
     let toast = document.getElementById("ytm-desktop-signin-status");
     if (!toast) {
       toast = document.createElement("div");
@@ -436,7 +390,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (capturedKey === key) return;
 
     sending = true;
-    installStatusToast("Connecting the Google account you selected…");
+    showStatus("Connecting your selected Google account…");
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -447,17 +401,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       if (response && response.captured) {
         capturedKey = key;
-        installStatusToast("Connected to YTM Desktop. You can return to the app.");
+        showStatus("Connected. Returning to YTM Desktop…");
         return;
       }
 
       if (response && response.reason === "not-signed-in") {
-        installStatusToast("Finishing Google sign-in…");
+        showStatus("Finishing Google sign-in…");
       } else {
-        installStatusToast("Waiting for the YouTube Music session…");
+        showStatus("Waiting for the YouTube Music session…");
       }
     } catch (_) {
-      installStatusToast("Waiting for YTM Desktop…");
+      showStatus("Waiting for YTM Desktop…");
     } finally {
       sending = false;
     }
@@ -484,7 +438,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
   });
 
-  installStatusToast("Finishing YTM Desktop sign-in…");
+  showStatus("Finishing YTM Desktop sign-in…");
   scheduleCapture(400);
 })();
 "#;
@@ -499,16 +453,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     Ok(dir)
 }
 
-fn launch_brave_with_existing_profile(
+fn launch_brave_auth_profile(
     exe: &Path,
-    profile_name: &str,
+    user_data: &Path,
     extension_dir: &Path,
 ) -> Result<(), String> {
     Command::new(exe)
-        .arg(format!("--profile-directory={profile_name}"))
+        .arg(format!("--user-data-dir={}", user_data.display()))
+        .arg("--profile-directory=Default")
         .arg(format!("--load-extension={}", extension_dir.display()))
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
+        .arg("--disable-background-mode")
         .arg("--new-window")
         .arg(GOOGLE_ACCOUNT_CHOOSER_URL)
         .spawn()
@@ -519,29 +475,14 @@ fn launch_brave_with_existing_profile(
 
 async fn start(app: &AppHandle, bridge: BraveAuthBridgeState) -> Result<(), String> {
     let exe = find_brave()?;
-
-    if brave_is_running() {
-        return Err(
-            "Close Brave completely before starting Google sign-in, then click Sign in with Google again. YTM Desktop opens Google's account chooser in your real Brave profile and loads a temporary local sign-in bridge for the final YouTube Music handoff."
-                .to_string(),
-        );
-    }
-
-    let user_data = normal_brave_user_data()?;
-    let profile_name = profile_name_from_local_state(&user_data);
-    let profile_dir = user_data.join(&profile_name);
-
-    if !profile_dir.is_dir() {
-        return Err(format!(
-            "Brave profile '{}' was not found at {}.",
-            profile_name,
-            profile_dir.display()
-        ));
-    }
+    let user_data = auth_browser_user_data(app)?;
 
     let (port, token) = start_bridge_server(bridge).await?;
     let extension_dir = write_bridge_extension(app, port, &token)?;
-    launch_brave_with_existing_profile(&exe, &profile_name, &extension_dir)
+
+    // This profile belongs only to YTM Desktop authentication, so it can run at
+    // the same time as the user's everyday Brave profile with no file/profile lock.
+    launch_brave_auth_profile(&exe, &user_data, &extension_dir)
 }
 
 #[tauri::command]
@@ -586,13 +527,15 @@ pub async fn poll_brave_login(
             Ok(Some(status))
         }
         Err(error) => {
+            // Keep the captured session and retry on the next frontend poll. The
+            // YouTube Music account can take a moment to become usable immediately
+            // after Google's redirect even though the cookies are already present.
             eprintln!(
-                "Google-selected YouTube Music account was not ready: authuser={} page_id={:?}: {}",
+                "Google-selected YouTube Music account is not ready yet: authuser={} page_id={:?}: {}",
                 captured.auth_user,
                 captured.page_id,
                 error
             );
-            *bridge.captured_session.lock().await = None;
             Ok(None)
         }
     }
