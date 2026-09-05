@@ -149,7 +149,7 @@ namespace YTMusicLite
             IntPtr region = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, 18, 18);
             try
             {
-                Region = Region.FromHrgn(region);
+                Region = System.Drawing.Region.FromHrgn(region);
             }
             finally
             {
