@@ -19,8 +19,8 @@ namespace YTMusicLite
                 Application.SetCompatibleTextRenderingDefault(false);
 
                 MainForm main = new MainForm();
-                MenuStyler.Attach(main);
                 WebViewChromeFix.Attach(main);
+                UiPolish.Attach(main);
                 Application.Run(main);
             }
             catch (Exception ex)
