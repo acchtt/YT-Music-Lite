@@ -27,7 +27,7 @@ export function SettingsView() {
       .catch((e) => setUpdate({
         configured: true,
         available: false,
-        currentVersion: "0.3.5",
+        currentVersion: "0.3.7",
         message: String(e)
       }));
 
@@ -103,7 +103,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: false,
-        currentVersion: prev?.currentVersion || "0.3.5",
+        currentVersion: prev?.currentVersion || "0.3.7",
         source: prev?.source,
         message: String(e)
       }));
@@ -121,7 +121,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: prev?.available ?? false,
-        currentVersion: prev?.currentVersion || "0.3.5",
+        currentVersion: prev?.currentVersion || "0.3.7",
         version: prev?.version,
         notes: prev?.notes,
         publishedAt: prev?.publishedAt,
@@ -179,7 +179,7 @@ export function SettingsView() {
       <div className="update-head">
         <div>
           <label>App updates</label>
-          <h3>YTM Desktop {update?.currentVersion || "0.3.5"}</h3>
+          <h3>YTM Desktop {update?.currentVersion || "0.3.7"}</h3>
           <p className="muted updater-subtitle">Stable channel · GitHub Releases</p>
         </div>
         <button className="secondary-button" onClick={checkUpdate} disabled={updateBusy}>
