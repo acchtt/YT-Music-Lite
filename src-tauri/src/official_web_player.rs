@@ -8,7 +8,6 @@ use tauri::{
 use tokio::sync::oneshot;
 
 const PLAYER_LABEL: &str = "ytm-official-player";
-const PLAYER_HOME: &str = "https://music.youtube.com/";
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,9 +88,6 @@ fn install_session(window: &WebviewWindow, cookie_header: &str) -> Result<usize,
             continue;
         }
 
-        // __Host- cookies cannot carry a Domain attribute. They are not required
-        // for the captured YTM auth session, so skip them instead of installing an
-        // invalid cookie into WebView2.
         if name.starts_with("__Host-") {
             continue;
         }
@@ -168,8 +164,6 @@ pub async fn load_track(
     let window = player_window(app)?;
     install_session(&window, &cookie_header)?;
 
-    // Give WebView2 a moment to commit cookie changes before the authenticated
-    // navigation. Playback after this point is entirely YouTube's official player.
     tokio::time::sleep(Duration::from_millis(80)).await;
     let url = tauri::Url::parse(&format!(
         "https://music.youtube.com/watch?v={}",
@@ -295,15 +289,6 @@ pub async fn status(app: &AppHandle) -> Result<Option<WebMediaStatus>, String> {
 
 pub fn reset(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(PLAYER_LABEL) {
-        let _ = window.clear_all_browsing_data();
         let _ = window.close();
     }
-}
-
-pub fn provider_name() -> &'static str {
-    "youtube-music-official-webview"
-}
-
-pub fn player_home() -> &'static str {
-    PLAYER_HOME
 }
