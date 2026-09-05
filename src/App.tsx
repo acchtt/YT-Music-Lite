@@ -9,14 +9,12 @@ import { LibraryView } from "./views/LibraryView";
 import { SettingsView } from "./views/SettingsView";
 import { MiniPlayer } from "./windows/MiniPlayer";
 import { usePlayer } from "./hooks/usePlayer";
-import { useAudioEngine } from "./hooks/useAudioEngine";
 import { api } from "./lib/tauri";
 import type { Track } from "./types/music";
 
 function MainApp() {
   const [page, setPage] = useState<Page>("home");
   const { state, control, queue } = usePlayer();
-  useAudioEngine(state);
   const play = (track: Track) => queue(track);
 
   return <div className="app">
