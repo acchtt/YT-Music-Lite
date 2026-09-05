@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace YTMusicLite
 {
@@ -11,6 +12,8 @@ namespace YTMusicLite
         public static void Attach(MainForm main)
         {
             if (main == null) return;
+            ApplyBranding(main);
+            MakeCurrentTrackClickable(main);
             SkinIconButtons(main);
             SkinVolumeGlyphs(main);
             SkinTray(main);
@@ -18,9 +21,98 @@ namespace YTMusicLite
             MiniPlayerForm mini = GetPrivateField<MiniPlayerForm>(main, "miniPlayer");
             if (mini != null)
             {
+                MakeMiniTrackClickable(main, mini);
                 SkinIconButtons(mini);
                 SkinVolumeGlyphs(mini);
             }
+        }
+
+        private static void ApplyBranding(MainForm main)
+        {
+            Panel topBar = GetPrivateField<Panel>(main, "topBar");
+            if (topBar == null) return;
+
+            List<Label> labels = new List<Label>();
+            CollectLabels(topBar, labels);
+            foreach (Label label in labels)
+            {
+                if (label.Text == "●" || label.Text == "YT Music Lite") label.Visible = false;
+            }
+
+            BrandLogoControl logo = new BrandLogoControl();
+            logo.Location = new Point(8, 8);
+            logo.Size = new Size(150, 38);
+            logo.Click += delegate
+            {
+                WebView2 web = GetPrivateField<WebView2>(main, "web");
+                if (web != null && web.CoreWebView2 != null) web.CoreWebView2.Navigate("https://music.youtube.com/");
+            };
+            topBar.Controls.Add(logo);
+            logo.BringToFront();
+        }
+
+        private static void MakeCurrentTrackClickable(MainForm main)
+        {
+            PictureBox artwork = GetPrivateField<PictureBox>(main, "artwork");
+            Label title = GetPrivateField<Label>(main, "nowTitle");
+            Label artist = GetPrivateField<Label>(main, "nowArtist");
+            ToolTip tips = GetPrivateField<ToolTip>(main, "tips");
+
+            WireTrackControl(main, artwork, tips);
+            WireTrackControl(main, title, tips);
+            WireTrackControl(main, artist, tips);
+        }
+
+        private static void MakeMiniTrackClickable(MainForm main, MiniPlayerForm mini)
+        {
+            PictureBox artwork = GetPrivateField<PictureBox>(mini, "artwork");
+            Label title = GetPrivateField<Label>(mini, "title");
+            Label artist = GetPrivateField<Label>(mini, "artist");
+            ToolTip tips = GetPrivateField<ToolTip>(mini, "tips");
+
+            WireTrackControl(main, artwork, tips);
+            WireTrackControl(main, title, tips);
+            WireTrackControl(main, artist, tips);
+        }
+
+        private static void WireTrackControl(MainForm main, Control control, ToolTip tips)
+        {
+            if (control == null) return;
+            control.Cursor = Cursors.Hand;
+            control.Click += delegate { OpenCurrentTrack(main); };
+            if (tips != null) tips.SetToolTip(control, "Open current track");
+        }
+
+        private static async void OpenCurrentTrack(MainForm main)
+        {
+            if (main == null) return;
+            main.RestoreMainWindow();
+
+            WebView2 web = GetPrivateField<WebView2>(main, "web");
+            if (web == null || web.CoreWebView2 == null) return;
+
+            string script = @"(() => {
+                const bar = document.querySelector('ytmusic-player-bar');
+                if (!bar) return 'no-player';
+                const link =
+                    bar.querySelector('a[href*=""watch""]') ||
+                    bar.querySelector('yt-formatted-string.title a') ||
+                    (bar.querySelector('.title') && bar.querySelector('.title').closest('a')) ||
+                    (bar.querySelector('img') && bar.querySelector('img').closest('a'));
+                if (link) {
+                    link.click();
+                    return 'opened';
+                }
+                const target = bar.querySelector('.title, yt-formatted-string.title, .thumbnail-image-wrapper, img');
+                if (target && typeof target.click === 'function') {
+                    target.click();
+                    return 'clicked';
+                }
+                return 'current';
+            })();";
+
+            try { await web.CoreWebView2.ExecuteScriptAsync(script); }
+            catch { }
         }
 
         private static void SkinIconButtons(Control root)
@@ -99,6 +191,21 @@ namespace YTMusicLite
             if (tray == null || tray.ContextMenuStrip == null) return;
 
             ContextMenuStrip menu = tray.ContextMenuStrip;
+            bool hasOpenTrack = false;
+            int insertAt = Math.Min(2, menu.Items.Count);
+            for (int i = 0; i < menu.Items.Count; i++)
+            {
+                ToolStripMenuItem existing = menu.Items[i] as ToolStripMenuItem;
+                if (existing != null && existing.Text == "Open current track") hasOpenTrack = true;
+                if (existing != null && existing.Text == "Mini player") insertAt = i + 1;
+            }
+            if (!hasOpenTrack)
+            {
+                ToolStripMenuItem openTrack = new ToolStripMenuItem("Open current track");
+                openTrack.Click += delegate { OpenCurrentTrack(main); };
+                menu.Items.Insert(insertAt, openTrack);
+            }
+
             menu.RenderMode = ToolStripRenderMode.Professional;
             menu.Renderer = new LiteMenuRenderer();
             menu.BackColor = Color.FromArgb(24, 24, 24);
@@ -153,6 +260,7 @@ namespace YTMusicLite
             kind = IconKind.Window;
             if (text == "Show YT Music Lite") { kind = IconKind.Window; return true; }
             if (text == "Mini player") { kind = IconKind.MiniPlayer; return true; }
+            if (text == "Open current track") { kind = IconKind.Play; return true; }
             if (text == "Play / Pause") { kind = IconKind.Play; return true; }
             if (text == "Sleep") { kind = IconKind.Sleep; return true; }
             if (text == "Settings") { kind = IconKind.Settings; return true; }
