@@ -46,6 +46,7 @@ $Sources = @(
     (Join-Path $Root "Program.cs"),
     (Join-Path $Root "PlayerState.cs"),
     (Join-Path $Root "UiControls.cs"),
+    (Join-Path $Root "Branding.cs"),
     (Join-Path $Root "SettingsForm.cs"),
     (Join-Path $Root "MiniPlayerForm.cs"),
     (Join-Path $Root "MenuStyler.cs"),
@@ -71,7 +72,7 @@ $Args = @(
     "/reference:$WinForms"
 ) + $Sources
 
-Write-Host "Building YT Music Lite 4.1 with C# 5 compatibility ..." -ForegroundColor Cyan
+Write-Host "Building YT Music Lite 4.1.5 with C# 5 compatibility ..." -ForegroundColor Cyan
 & $Csc $Args
 if ($LASTEXITCODE -ne 0) {
     throw "C# compilation failed with exit code $LASTEXITCODE"
