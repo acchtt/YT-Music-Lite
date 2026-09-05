@@ -27,7 +27,7 @@ export function SettingsView() {
       .catch((e) => setUpdate({
         configured: true,
         available: false,
-        currentVersion: "0.3.3",
+        currentVersion: "0.3.4",
         message: String(e)
       }));
 
@@ -45,7 +45,7 @@ export function SettingsView() {
         if (cancelled || !result) return;
         setStatus(result);
         if (result.sourcePath) setPath(result.sourcePath);
-        setLoginMessage("Connected to the Google account you selected.");
+        setLoginMessage("Connected to the Google account you selected. Your normal Brave session was not touched.");
         setLoginBusy(false);
       } catch (e) {
         if (cancelled) return;
@@ -65,7 +65,7 @@ export function SettingsView() {
     setLoginBusy(true);
     try {
       await api.startWebLogin();
-      setLoginMessage("Google's account chooser opened in Brave. Pick the account you want; YTM Desktop will finish the YouTube Music handoff automatically.");
+      setLoginMessage("A separate YTM Desktop Brave sign-in window opened. Keep your normal Brave open; choose or sign into the Google account you want and YTM Desktop will finish automatically.");
     } catch (e) {
       setLoginBusy(false);
       setLoginMessage(String(e));
@@ -103,7 +103,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: false,
-        currentVersion: prev?.currentVersion || "0.3.3",
+        currentVersion: prev?.currentVersion || "0.3.4",
         source: prev?.source,
         message: String(e)
       }));
@@ -121,7 +121,7 @@ export function SettingsView() {
       setUpdate((prev) => ({
         configured: true,
         available: prev?.available ?? false,
-        currentVersion: prev?.currentVersion || "0.3.3",
+        currentVersion: prev?.currentVersion || "0.3.4",
         version: prev?.version,
         notes: prev?.notes,
         publishedAt: prev?.publishedAt,
@@ -157,7 +157,7 @@ export function SettingsView() {
     <div className="settings-card column auth-card">
       <label>Account</label>
       <h3>Sign in with Google</h3>
-      <p className="muted">YTM Desktop opens Google's normal account chooser in your real Brave profile. Pick the Google account you want. Google then redirects briefly to YouTube Music so the app can capture that exact active session automatically; there is no extra “Connect this account” step. Close Brave completely before starting so the temporary local handoff bridge can load.</p>
+      <p className="muted">YTM Desktop now uses its own persistent Brave authentication profile. Your everyday Brave can remain open and is never modified or locked. The first time, choose or sign into the Google account you want. That auth profile keeps the Google login for future sign-ins, then briefly hands the selected YouTube Music session back to YTM Desktop automatically.</p>
       <div className="auth-actions">
         <button className="install-button auth-signin" onClick={signIn} disabled={loginBusy}>
           {loginBusy ? "Waiting for Google sign-in…" : status.valid ? "Switch account" : "Sign in with Google"}
@@ -179,7 +179,7 @@ export function SettingsView() {
       <div className="update-head">
         <div>
           <label>App updates</label>
-          <h3>YTM Desktop {update?.currentVersion || "0.3.3"}</h3>
+          <h3>YTM Desktop {update?.currentVersion || "0.3.4"}</h3>
           <p className="muted updater-subtitle">Stable channel · GitHub Releases</p>
         </div>
         <button className="secondary-button" onClick={checkUpdate} disabled={updateBusy}>
