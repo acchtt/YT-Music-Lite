@@ -60,7 +60,7 @@ namespace YTMusicLite
             content.Dock = DockStyle.Fill;
             content.BackColor = Color.FromArgb(20, 20, 20);
             Controls.Add(content);
-            content.BringToFront();
+            sidebar.BringToFront();
 
             generalPage = BuildGeneralPage();
             aboutPage = BuildAboutPage();
