@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::{models::TrackVm, playback_resolver::ResolvedNativeAudio};
+use crate::{models::TrackVm, official_web_player::WebMediaStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -34,7 +34,7 @@ pub struct PlayerSnapshot {
 impl Default for PlayerSnapshot {
     fn default() -> Self {
         Self {
-            provider: "rustypipe-native-rodio".into(),
+            provider: "youtube-music-official-webview".into(),
             queue: vec![],
             current_index: -1,
             current: None,
@@ -61,17 +61,12 @@ impl PlayerState {
         self.0.read().await.clone()
     }
 
-    pub async fn queue_track(
-        &self,
-        track: TrackVm,
-        play_now: bool,
-        stream: &ResolvedNativeAudio,
-    ) -> PlayerSnapshot {
+    pub async fn queue_track(&self, track: TrackVm, play_now: bool) -> PlayerSnapshot {
         let mut state = self.0.write().await;
         state.queue.push(track.clone());
         let index = (state.queue.len() - 1) as i32;
         if play_now || state.current.is_none() {
-            activate(&mut state, index, track, stream, play_now);
+            activate(&mut state, index, track, play_now);
         }
         state.clone()
     }
@@ -93,11 +88,10 @@ impl PlayerState {
         &self,
         index: i32,
         track: TrackVm,
-        stream: &ResolvedNativeAudio,
         autoplay: bool,
     ) -> PlayerSnapshot {
         let mut state = self.0.write().await;
-        activate(&mut state, index, track, stream, autoplay);
+        activate(&mut state, index, track, autoplay);
         state.clone()
     }
 
@@ -105,9 +99,21 @@ impl PlayerState {
         let mut state = self.0.write().await;
         match action {
             "play_pause" => {
-                if state.playable {
+                if state.current.is_some() {
                     state.is_playing = !state.is_playing;
                     state.notice = if state.is_playing { "Playing" } else { "Paused" }.into();
+                }
+            }
+            "play" => {
+                if state.current.is_some() {
+                    state.is_playing = true;
+                    state.notice = "Playing".into();
+                }
+            }
+            "pause" => {
+                if state.current.is_some() {
+                    state.is_playing = false;
+                    state.notice = "Paused".into();
                 }
             }
             "seek" => {
@@ -125,37 +131,52 @@ impl PlayerState {
         state.clone()
     }
 
-    pub async fn sync_native(
-        &self,
-        position: f64,
-        is_playing: bool,
-        ended: bool,
-        volume: f64,
-    ) -> PlayerSnapshot {
+    pub async fn sync_web(&self, media: &WebMediaStatus) -> PlayerSnapshot {
         let mut state = self.0.write().await;
-        if position.is_finite() {
-            state.position = if ended && state.duration > 0.0 {
-                state.duration
-            } else if state.duration > 0.0 {
-                position.clamp(0.0, state.duration)
+
+        if media.position.is_finite() {
+            state.position = media.position.max(0.0);
+        }
+        if media.duration.is_finite() && media.duration > 0.0 {
+            state.duration = media.duration;
+        }
+        if media.volume.is_finite() {
+            state.volume = media.volume.clamp(0.0, 1.0);
+        }
+
+        if let Some(error) = media.error.as_deref().filter(|value| !value.trim().is_empty()) {
+            state.playable = false;
+            state.is_playing = false;
+            state.notice = format!("YouTube Music player error: {error}");
+            return state.clone();
+        }
+
+        if media.ready {
+            state.playable = true;
+            state.is_playing = media.is_playing;
+            state.notice = if media.ended {
+                "Finished".into()
+            } else if media.is_playing {
+                "Playing through YouTube Music.".into()
             } else {
-                position.max(0.0)
+                "Paused".into()
+            };
+        } else if state.current.is_some() {
+            state.playable = false;
+            state.is_playing = false;
+            state.notice = if media.page_url.starts_with("https://music.youtube.com")
+                || media.page_url == "about:blank"
+            {
+                "Loading YouTube Music player…".into()
+            } else {
+                format!("YouTube Music is redirecting playback: {}", media.page_url)
             };
         }
-        if volume.is_finite() {
-            state.volume = volume.clamp(0.0, 1.0);
-        }
-        state.is_playing = is_playing && state.playable;
-        if ended && state.playable {
-            state.notice = "Finished".into();
-        } else if state.playable {
-            state.notice = if state.is_playing { "Playing" } else { "Paused" }.into();
-        }
+
         state.clone()
     }
 
-    // Kept for compatibility with older frontends. Native playback no longer relies
-    // on WebView2 timeupdate events.
+    // Kept for compatibility with an older frontend during an update boundary.
     pub async fn sync_playback(
         &self,
         position: f64,
@@ -170,7 +191,7 @@ impl PlayerState {
         if duration.is_finite() && duration > 0.0 {
             state.duration = duration;
         }
-        state.is_playing = is_playing && state.playable;
+        state.is_playing = is_playing && state.current.is_some();
         if volume.is_finite() {
             state.volume = volume.clamp(0.0, 1.0);
         }
@@ -179,39 +200,30 @@ impl PlayerState {
 
     pub async fn playback_error(&self, message: String) -> PlayerSnapshot {
         let mut state = self.0.write().await;
+        state.playable = false;
         state.is_playing = false;
         state.notice = message;
         state.clone()
     }
 }
 
-fn activate(
-    state: &mut PlayerSnapshot,
-    index: i32,
-    track: TrackVm,
-    stream: &ResolvedNativeAudio,
-    autoplay: bool,
-) {
+fn activate(state: &mut PlayerSnapshot, index: i32, track: TrackVm, autoplay: bool) {
     state.current_index = index;
     state.current = Some(track);
     state.position = 0.0;
-    state.duration = if stream.duration_seconds > 0.0 {
-        stream.duration_seconds
-    } else {
-        state
-            .current
-            .as_ref()
-            .map(|track| track.duration_seconds)
-            .unwrap_or(0.0)
-    };
-    state.playable = true;
-    state.is_playing = autoplay;
+    state.duration = state
+        .current
+        .as_ref()
+        .map(|track| track.duration_seconds)
+        .unwrap_or(0.0);
+    state.playable = false;
+    state.is_playing = false;
     state.stream_url = None;
-    state.stream_mime = Some(stream.mime.clone());
-    state.stream_bitrate = Some(stream.bitrate);
+    state.stream_mime = None;
+    state.stream_bitrate = None;
     state.notice = if autoplay {
-        "Playing with native Rust audio.".into()
+        "Loading YouTube Music player…".into()
     } else {
-        "Ready to play with native Rust audio.".into()
+        "Loading track in YouTube Music…".into()
     };
 }

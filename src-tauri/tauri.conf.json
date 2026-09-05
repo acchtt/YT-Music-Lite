@@ -51,9 +51,6 @@
     "targets": [
       "nsis"
     ],
-    "createUpdaterArtifacts": false,
-    "externalBin": [
-      "binaries/rustypipe-botguard"
-    ]
+    "createUpdaterArtifacts": false
   }
 }

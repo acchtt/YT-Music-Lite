@@ -4,8 +4,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use crate::{
     models::*,
     music_service::{normalize_auth_path, MusicServiceState},
-    native_audio::NativeAudioState,
-    playback_resolver::PlaybackResolverState,
+    official_web_player,
     player::{PlayerSnapshot, PlayerState},
     update_service::{self, UpdateStatus},
 };
@@ -121,6 +120,7 @@ pub async fn configure_auth(
     let path = normalize_auth_path(&path)?;
     let status = music.configure(path.clone()).await?;
     fs::write(config_marker(&app)?, path.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
+    official_web_player::reset(&app);
     Ok(status)
 }
 
@@ -130,6 +130,7 @@ pub async fn clear_auth(
     music: State<'_, MusicServiceState>,
 ) -> Result<AuthStatus, String> {
     music.clear().await;
+    official_web_player::reset(&app);
     let _ = fs::remove_file(config_marker(&app)?);
     if let Ok(path) = managed_auth_path(&app) {
         let _ = fs::remove_file(path);
@@ -209,46 +210,30 @@ fn emit_player(app: &AppHandle, snapshot: &PlayerSnapshot) {
 
 #[tauri::command]
 pub async fn get_player_state(
+    app: AppHandle,
     player: State<'_, PlayerState>,
-    native: State<'_, NativeAudioState>,
 ) -> Result<PlayerSnapshot, String> {
-    let native_status = native.status();
-    Ok(player
-        .sync_native(
-            native_status.position,
-            native_status.is_playing,
-            native_status.ended,
-            native_status.volume,
-        )
-        .await)
+    match official_web_player::status(&app).await {
+        Ok(Some(media)) => Ok(player.sync_web(&media).await),
+        Ok(None) | Err(_) => Ok(player.snapshot().await),
+    }
 }
 
 #[tauri::command]
 pub async fn queue_track(
     app: AppHandle,
     player: State<'_, PlayerState>,
-    resolver: State<'_, PlaybackResolverState>,
-    native: State<'_, NativeAudioState>,
     track: TrackVm,
     play_now: bool,
 ) -> Result<PlayerSnapshot, String> {
-    let resolved = match resolver.resolve_native(&track.video_id).await {
-        Ok(resolved) => resolved,
-        Err(error) => {
-            let snapshot = player.playback_error(error.clone()).await;
-            emit_player(&app, &snapshot);
-            return Err(error);
-        }
-    };
-
     let volume = player.snapshot().await.volume;
-    if let Err(error) = native.load(resolved.bytes.clone(), play_now, volume) {
+    if let Err(error) = official_web_player::load_track(&app, &track.video_id, play_now, volume).await {
         let snapshot = player.playback_error(error.clone()).await;
         emit_player(&app, &snapshot);
         return Err(error);
     }
 
-    let snapshot = player.queue_track(track, play_now, &resolved).await;
+    let snapshot = player.queue_track(track, play_now).await;
     emit_player(&app, &snapshot);
     Ok(snapshot)
 }
@@ -257,8 +242,6 @@ pub async fn queue_track(
 pub async fn player_control(
     app: AppHandle,
     player: State<'_, PlayerState>,
-    resolver: State<'_, PlaybackResolverState>,
-    native: State<'_, NativeAudioState>,
     action: String,
     value: Option<f64>,
 ) -> Result<PlayerSnapshot, String> {
@@ -266,28 +249,25 @@ pub async fn player_control(
         "next" | "previous" => {
             let direction = if action == "next" { 1 } else { -1 };
             if let Some((index, track, autoplay)) = player.adjacent_target(direction).await {
-                let resolved = resolver.resolve_native(&track.video_id).await?;
                 let volume = player.snapshot().await.volume;
-                native.load(resolved.bytes.clone(), autoplay, volume)?;
-                player
-                    .activate_index(index, track, &resolved, autoplay)
-                    .await
+                official_web_player::load_track(&app, &track.video_id, autoplay, volume).await?;
+                player.activate_index(index, track, autoplay).await
             } else {
                 player.snapshot().await
             }
         }
-        "play_pause" => {
-            native.toggle()?;
-            player.control_simple("play_pause", None).await
+        "play_pause" | "play" | "pause" => {
+            official_web_player::control(&app, &action, None)?;
+            player.control_simple(&action, None).await
         }
         "seek" => {
             let seconds = value.ok_or_else(|| "Seek requires a position.".to_string())?;
-            native.seek(seconds)?;
+            official_web_player::control(&app, "seek", Some(seconds))?;
             player.control_simple("seek", Some(seconds)).await
         }
         "volume" => {
             let volume = value.ok_or_else(|| "Volume requires a value.".to_string())?;
-            native.set_volume(volume)?;
+            official_web_player::control(&app, "volume", Some(volume))?;
             player.control_simple("volume", Some(volume)).await
         }
         _ => player.control_simple(&action, value).await,
@@ -297,8 +277,7 @@ pub async fn player_control(
     Ok(snapshot)
 }
 
-// Legacy WebView2 playback synchronization command. Kept so an older frontend can
-// still talk to a newer backend during an update, but 0.3.7 does not use it.
+// Compatibility command for frontends from the pre-0.4 playback implementation.
 #[tauri::command]
 pub async fn sync_playback(
     app: AppHandle,

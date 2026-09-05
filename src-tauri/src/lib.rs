@@ -2,8 +2,7 @@ mod brave_auth;
 mod commands;
 mod models;
 mod music_service;
-mod native_audio;
-mod playback_resolver;
+mod official_web_player;
 mod player;
 mod update_service;
 
@@ -12,16 +11,12 @@ use tauri::Manager;
 
 use brave_auth::BraveAuthBridgeState;
 use music_service::MusicServiceState;
-use native_audio::NativeAudioState;
-use playback_resolver::PlaybackResolverState;
 use player::PlayerState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(MusicServiceState::default())
-        .manage(PlaybackResolverState::default())
-        .manage(NativeAudioState::default())
         .manage(PlayerState::default())
         .manage(BraveAuthBridgeState::default())
         .setup(|app| {

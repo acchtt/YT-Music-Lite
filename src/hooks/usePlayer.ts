@@ -5,7 +5,7 @@ import type { PlayerState } from "../types/player";
 import type { Track } from "../types/music";
 
 const empty: PlayerState = {
-  provider: "rustypipe-native-rodio",
+  provider: "youtube-music-official-webview",
   queue: [],
   currentIndex: -1,
   current: null,
@@ -33,7 +33,7 @@ export function usePlayer() {
         const next = await api.player();
         if (!cancelled) setState(next);
       } catch {
-        // Keep the last good player state during transient IPC failures.
+        // Keep the last good player state during transient IPC/WebView2 state reads.
       }
     };
 
