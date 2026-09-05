@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BuildDir = Join-Path $Root "build"
-$Version = "4.1.5"
+$Version = "4.1.6"
 $ReleaseDir = Join-Path $Root "release"
 $PayloadDir = Join-Path $ReleaseDir "payload"
 $ZipName = "YTMusicLite-v$Version-win-x64.zip"
