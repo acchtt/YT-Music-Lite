@@ -42,14 +42,13 @@ struct RemoteAudioStream {
     mime: String,
 }
 
-#[derive(Debug)]
 pub struct ProxyAudioResponse {
     pub status: u16,
     pub content_type: String,
     pub content_length: Option<String>,
     pub content_range: Option<String>,
     pub accept_ranges: Option<String>,
-    pub body: Vec<u8>,
+    pub body: Body,
 }
 
 #[derive(Clone)]
@@ -78,8 +77,6 @@ impl Default for PlaybackResolverState {
 
 impl PlaybackResolverState {
     /// Start a loopback-only HTTP server used solely for media delivery to WebView2.
-    /// Normal HTTP Range handling is substantially more reliable for HTML media than
-    /// a mapped custom WebView2 protocol.
     pub async fn start_local_proxy(&self) -> Result<u16, String> {
         if self.proxy_port.load(Ordering::Acquire) != 0 {
             return Ok(self.proxy_port.load(Ordering::Relaxed));
@@ -138,8 +135,6 @@ impl PlaybackResolverState {
     async fn resolve_remote(&self, video_id: &str) -> Result<(RemoteAudioStream, u32, f64), String> {
         let mut failures = Vec::new();
 
-        // Resolve and probe each app client separately. A player response can succeed while
-        // its googlevideo URL is rejected later, so player_from_clients alone is not enough.
         for client_type in [ClientType::Ios, ClientType::Android] {
             let query = self.client.query();
             let player = match query.player_from_client(video_id, client_type).await {
@@ -196,12 +191,13 @@ impl PlaybackResolverState {
             .ok_or_else(|| "Playback stream is no longer available. Re-select the track.".to_string())?;
 
         let first = self.fetch_remote(&cached, range.as_deref()).await?;
-        if first.status != 403 {
+        if !matches!(first.status, 401 | 403 | 410) {
             return Ok(first);
         }
 
-        // googlevideo URLs expire. Refresh once in-place so a long-running app can keep
-        // playing without forcing the user to click the track again.
+        // googlevideo URLs expire or can become invalid after a short time. Refresh once
+        // before returning a failed media response to WebView2.
+        drop(first);
         let (fresh, _, _) = self.resolve_remote(&cached.video_id).await?;
         self.streams.write().await.insert(key.to_string(), fresh.clone());
         self.fetch_remote(&fresh, range.as_deref()).await
@@ -219,10 +215,10 @@ impl PlaybackResolverState {
             .header(ORIGIN, "https://www.youtube.com")
             .header(REFERER, "https://www.youtube.com/");
 
+        // Preserve the media element's exact range request. Do not invent a partial
+        // request when WebView2 asked for the complete resource.
         if let Some(range) = range.filter(|v| !v.trim().is_empty()) {
             request = request.header(RANGE, range);
-        } else {
-            request = request.header(RANGE, "bytes=0-8388607");
         }
 
         let response = request
@@ -231,32 +227,39 @@ impl PlaybackResolverState {
             .map_err(|e| format!("Playback network request failed: {e}"))?;
         let status = response.status().as_u16();
         let headers = response.headers().clone();
-        let body = response
-            .bytes()
-            .await
-            .map_err(|e| format!("Playback stream read failed: {e}"))?
-            .to_vec();
+
+        let upstream_type = headers
+            .get(CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        let content_type = upstream_type
+            .filter(|value| value.to_ascii_lowercase().starts_with("audio/"))
+            .unwrap_or_else(|| stream.mime.clone());
+
+        let content_length = headers
+            .get(CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        let content_range = headers
+            .get(CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        let accept_ranges = headers
+            .get(ACCEPT_RANGES)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned)
+            .or_else(|| Some("bytes".into()));
+
+        // Stream the response directly to WebView2 instead of buffering a whole song
+        // before the first byte reaches the HTMLMediaElement.
+        let body = Body::from_stream(response.bytes_stream());
 
         Ok(ProxyAudioResponse {
             status,
-            content_type: headers
-                .get(CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned)
-                .unwrap_or_else(|| stream.mime.clone()),
-            content_length: headers
-                .get(CONTENT_LENGTH)
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned),
-            content_range: headers
-                .get(CONTENT_RANGE)
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned),
-            accept_ranges: headers
-                .get(ACCEPT_RANGES)
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_owned)
-                .or_else(|| Some("bytes".into())),
+            content_type,
+            content_length,
+            content_range,
+            accept_ranges,
             body,
         })
     }
@@ -276,8 +279,8 @@ async fn proxy_handler(
         Ok(remote) => {
             #[cfg(debug_assertions)]
             println!(
-                "YTM media proxy: key={key} range={:?} status={} bytes={} content-range={:?}",
-                range, remote.status, remote.body.len(), remote.content_range
+                "YTM media proxy: key={key} range={:?} status={} content-length={:?} content-range={:?}",
+                range, remote.status, remote.content_length, remote.content_range
             );
             let status = StatusCode::from_u16(remote.status).unwrap_or(StatusCode::BAD_GATEWAY);
             let mut builder = Response::builder()
@@ -301,7 +304,7 @@ async fn proxy_handler(
             }
 
             builder
-                .body(Body::from(remote.body))
+                .body(remote.body)
                 .unwrap_or_else(|_| Response::new(Body::from("Failed to build playback response")))
         }
         Err(message) => Response::builder()
@@ -314,7 +317,7 @@ async fn proxy_handler(
 }
 
 fn choose_stream(streams: &[AudioStream]) -> Option<&AudioStream> {
-    // WebView2 handles AAC/MP4 reliably. Keep another non-DRM audio format as fallback.
+    // Prefer AAC/MP4 for WebView2. Keep another non-DRM audio format as a fallback.
     streams
         .iter()
         .filter(|s| s.drm_systems.is_empty() && s.mime.starts_with("audio/mp4"))
