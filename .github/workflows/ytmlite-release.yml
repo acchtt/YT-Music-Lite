@@ -1,0 +1,43 @@
+name: ytmlite-release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ytmlite-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    if: startsWith(github.event.head_commit.message, 'Publish YT Music Lite')
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build YT Music Lite
+        shell: pwsh
+        run: .\yt-music-lite\build.ps1
+
+      - name: Package update
+        shell: pwsh
+        run: .\yt-music-lite\make-release.ps1
+
+      - name: Publish YT Music Lite release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ytmlite-v4.0.1
+          target_commitish: ${{ github.sha }}
+          name: YT Music Lite v4.0.1
+          body: |
+            YT Music Lite v4.0.1
+
+            - Fixes the main WebView layout so YouTube Music starts below the custom toolbar instead of rendering behind it.
+            - Keeps the v4 mini-player, tray controls, sleep mode, and in-app updater.
+          files: |
+            yt-music-lite/release/YTMusicLite-v4.0.1-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.0.1-win-x64.zip.sha256
