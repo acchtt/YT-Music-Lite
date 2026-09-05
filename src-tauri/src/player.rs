@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::{models::TrackVm, playback_resolver::ResolvedAudioStream};
+use crate::{models::TrackVm, playback_resolver::ResolvedNativeAudio};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -34,7 +34,7 @@ pub struct PlayerSnapshot {
 impl Default for PlayerSnapshot {
     fn default() -> Self {
         Self {
-            provider: "rustypipe-htmlaudio".into(),
+            provider: "rustypipe-native-rodio".into(),
             queue: vec![],
             current_index: -1,
             current: None,
@@ -65,66 +65,95 @@ impl PlayerState {
         &self,
         track: TrackVm,
         play_now: bool,
-        stream: ResolvedAudioStream,
+        stream: &ResolvedNativeAudio,
     ) -> PlayerSnapshot {
-        let mut s = self.0.write().await;
-        s.queue.push(track.clone());
-        let index = (s.queue.len() - 1) as i32;
-        if play_now || s.current.is_none() {
-            activate(&mut s, index, track, stream, play_now);
+        let mut state = self.0.write().await;
+        state.queue.push(track.clone());
+        let index = (state.queue.len() - 1) as i32;
+        if play_now || state.current.is_none() {
+            activate(&mut state, index, track, stream, play_now);
         }
-        s.clone()
+        state.clone()
     }
 
     pub async fn adjacent_target(&self, direction: i32) -> Option<(i32, TrackVm, bool)> {
-        let s = self.0.read().await;
-        if s.queue.is_empty() {
+        let state = self.0.read().await;
+        if state.queue.is_empty() {
             return None;
         }
-        let current = s.current_index.max(0);
-        let next = (current + direction).clamp(0, (s.queue.len() - 1) as i32);
-        if next == s.current_index {
+        let current = state.current_index.max(0);
+        let next = (current + direction).clamp(0, (state.queue.len() - 1) as i32);
+        if next == state.current_index {
             return None;
         }
-        Some((next, s.queue[next as usize].clone(), s.is_playing))
+        Some((next, state.queue[next as usize].clone(), state.is_playing))
     }
 
     pub async fn activate_index(
         &self,
         index: i32,
         track: TrackVm,
-        stream: ResolvedAudioStream,
+        stream: &ResolvedNativeAudio,
         autoplay: bool,
     ) -> PlayerSnapshot {
-        let mut s = self.0.write().await;
-        activate(&mut s, index, track, stream, autoplay);
-        s.clone()
+        let mut state = self.0.write().await;
+        activate(&mut state, index, track, stream, autoplay);
+        state.clone()
     }
 
     pub async fn control_simple(&self, action: &str, value: Option<f64>) -> PlayerSnapshot {
-        let mut s = self.0.write().await;
+        let mut state = self.0.write().await;
         match action {
             "play_pause" => {
-                if s.playable {
-                    s.is_playing = !s.is_playing;
-                    s.notice = if s.is_playing { "Playing" } else { "Paused" }.into();
+                if state.playable {
+                    state.is_playing = !state.is_playing;
+                    state.notice = if state.is_playing { "Playing" } else { "Paused" }.into();
                 }
             }
             "seek" => {
-                if let Some(v) = value {
-                    s.position = v.clamp(0.0, s.duration.max(0.0));
+                if let Some(value) = value {
+                    state.position = value.clamp(0.0, state.duration.max(0.0));
                 }
             }
             "volume" => {
-                if let Some(v) = value {
-                    s.volume = v.clamp(0.0, 1.0);
+                if let Some(value) = value {
+                    state.volume = value.clamp(0.0, 1.0);
                 }
             }
             _ => {}
         }
-        s.clone()
+        state.clone()
     }
 
+    pub async fn sync_native(
+        &self,
+        position: f64,
+        is_playing: bool,
+        ended: bool,
+        volume: f64,
+    ) -> PlayerSnapshot {
+        let mut state = self.0.write().await;
+        if position.is_finite() {
+            state.position = if ended && state.duration > 0.0 {
+                state.duration
+            } else {
+                position.max(0.0).min(state.duration.max(position))
+            };
+        }
+        if volume.is_finite() {
+            state.volume = volume.clamp(0.0, 1.0);
+        }
+        state.is_playing = is_playing && state.playable;
+        if ended && state.playable {
+            state.notice = "Finished".into();
+        } else if state.playable {
+            state.notice = if state.is_playing { "Playing" } else { "Paused" }.into();
+        }
+        state.clone()
+    }
+
+    // Kept for compatibility with older frontends. Native playback no longer relies
+    // on WebView2 timeupdate events.
     pub async fn sync_playback(
         &self,
         position: f64,
@@ -132,54 +161,55 @@ impl PlayerState {
         is_playing: bool,
         volume: f64,
     ) -> PlayerSnapshot {
-        let mut s = self.0.write().await;
+        let mut state = self.0.write().await;
         if position.is_finite() {
-            s.position = position.max(0.0);
+            state.position = position.max(0.0);
         }
         if duration.is_finite() && duration > 0.0 {
-            s.duration = duration;
+            state.duration = duration;
         }
-        s.is_playing = is_playing && s.playable;
+        state.is_playing = is_playing && state.playable;
         if volume.is_finite() {
-            s.volume = volume.clamp(0.0, 1.0);
+            state.volume = volume.clamp(0.0, 1.0);
         }
-        s.clone()
+        state.clone()
     }
 
     pub async fn playback_error(&self, message: String) -> PlayerSnapshot {
-        let mut s = self.0.write().await;
-        s.is_playing = false;
-        s.notice = message;
-        s.clone()
+        let mut state = self.0.write().await;
+        state.is_playing = false;
+        state.notice = message;
+        state.clone()
     }
 }
 
 fn activate(
-    s: &mut PlayerSnapshot,
+    state: &mut PlayerSnapshot,
     index: i32,
     track: TrackVm,
-    stream: ResolvedAudioStream,
+    stream: &ResolvedNativeAudio,
     autoplay: bool,
 ) {
-    s.current_index = index;
-    s.current = Some(track);
-    s.position = 0.0;
-    s.duration = if stream.duration_seconds > 0.0 {
+    state.current_index = index;
+    state.current = Some(track);
+    state.position = 0.0;
+    state.duration = if stream.duration_seconds > 0.0 {
         stream.duration_seconds
     } else {
-        s.current
+        state
+            .current
             .as_ref()
-            .map(|t| t.duration_seconds)
+            .map(|track| track.duration_seconds)
             .unwrap_or(0.0)
     };
-    s.playable = true;
-    s.is_playing = autoplay;
-    s.stream_url = Some(stream.url);
-    s.stream_mime = Some(stream.mime);
-    s.stream_bitrate = Some(stream.bitrate);
-    s.notice = if autoplay {
-        "Resolving complete — starting playback.".into()
+    state.playable = true;
+    state.is_playing = autoplay;
+    state.stream_url = None;
+    state.stream_mime = Some(stream.mime.clone());
+    state.stream_bitrate = Some(stream.bitrate);
+    state.notice = if autoplay {
+        "Playing with native Rust audio.".into()
     } else {
-        "Ready to play.".into()
+        "Ready to play with native Rust audio.".into()
     };
 }
