@@ -4,6 +4,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder
 use crate::{
     models::*,
     music_service::{normalize_auth_path, MusicServiceState},
+    native_audio::NativeAudioState,
     playback_resolver::PlaybackResolverState,
     player::{PlayerSnapshot, PlayerState},
     update_service::{self, UpdateStatus},
@@ -76,8 +77,6 @@ pub async fn poll_web_login(
     let path = managed_auth_path(&app)?;
     let mut last_error = String::new();
 
-    // Most users are authuser=0, but multi-account Google sessions can use a
-    // different account slot. Try the small set YouTube commonly exposes.
     for auth_user in 0..=5 {
         let raw = serde_json::to_string_pretty(&serde_json::json!({
             "Cookie": cookie_header.clone(),
@@ -119,9 +118,9 @@ pub async fn configure_auth(
     music: State<'_, MusicServiceState>,
     path: String,
 ) -> Result<AuthStatus, String> {
-    let p = normalize_auth_path(&path)?;
-    let status = music.configure(p.clone()).await?;
-    fs::write(config_marker(&app)?, p.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
+    let path = normalize_auth_path(&path)?;
+    let status = music.configure(path.clone()).await?;
+    fs::write(config_marker(&app)?, path.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
     Ok(status)
 }
 
@@ -132,7 +131,9 @@ pub async fn clear_auth(
 ) -> Result<AuthStatus, String> {
     music.clear().await;
     let _ = fs::remove_file(config_marker(&app)?);
-    if let Ok(path) = managed_auth_path(&app) { let _ = fs::remove_file(path); }
+    if let Ok(path) = managed_auth_path(&app) {
+        let _ = fs::remove_file(path);
+    }
     Ok(music.status().await)
 }
 
@@ -140,6 +141,7 @@ pub async fn clear_auth(
 pub async fn get_home(music: State<'_, MusicServiceState>) -> Result<Vec<HomeSectionVm>, String> {
     music.home().await
 }
+
 #[tauri::command]
 pub async fn search_music(
     music: State<'_, MusicServiceState>,
@@ -147,6 +149,7 @@ pub async fn search_music(
 ) -> Result<SearchResultsVm, String> {
     music.search(&query).await
 }
+
 #[tauri::command]
 pub async fn get_library_playlists(
     music: State<'_, MusicServiceState>,
@@ -154,6 +157,7 @@ pub async fn get_library_playlists(
 ) -> Result<Vec<PlaylistVm>, String> {
     music.playlists(limit.unwrap_or(100)).await
 }
+
 #[tauri::command]
 pub async fn get_library_albums(
     music: State<'_, MusicServiceState>,
@@ -161,6 +165,7 @@ pub async fn get_library_albums(
 ) -> Result<Vec<AlbumVm>, String> {
     music.albums(limit.unwrap_or(100)).await
 }
+
 #[tauri::command]
 pub async fn get_library_artists(
     music: State<'_, MusicServiceState>,
@@ -168,6 +173,7 @@ pub async fn get_library_artists(
 ) -> Result<Vec<ArtistVm>, String> {
     music.artists(limit.unwrap_or(100)).await
 }
+
 #[tauri::command]
 pub async fn get_liked_songs(
     music: State<'_, MusicServiceState>,
@@ -175,10 +181,12 @@ pub async fn get_liked_songs(
 ) -> Result<Vec<TrackVm>, String> {
     music.liked(limit.unwrap_or(100)).await
 }
+
 #[tauri::command]
 pub async fn get_history(music: State<'_, MusicServiceState>) -> Result<Vec<TrackVm>, String> {
     music.history().await
 }
+
 #[tauri::command]
 pub async fn get_playlist_tracks(
     music: State<'_, MusicServiceState>,
@@ -186,6 +194,7 @@ pub async fn get_playlist_tracks(
 ) -> Result<Vec<TrackVm>, String> {
     music.playlist_tracks(&playlist_id).await
 }
+
 #[tauri::command]
 pub async fn get_lyrics(
     music: State<'_, MusicServiceState>,
@@ -194,13 +203,24 @@ pub async fn get_lyrics(
     music.lyrics(&video_id).await
 }
 
-#[tauri::command]
-pub async fn get_player_state(player: State<'_, PlayerState>) -> Result<PlayerSnapshot, String> {
-    Ok(player.snapshot().await)
-}
-
 fn emit_player(app: &AppHandle, snapshot: &PlayerSnapshot) {
     let _ = app.emit("player-state", snapshot);
+}
+
+#[tauri::command]
+pub async fn get_player_state(
+    player: State<'_, PlayerState>,
+    native: State<'_, NativeAudioState>,
+) -> Result<PlayerSnapshot, String> {
+    let native_status = native.status();
+    Ok(player
+        .sync_native(
+            native_status.position,
+            native_status.is_playing,
+            native_status.ended,
+            native_status.volume,
+        )
+        .await)
 }
 
 #[tauri::command]
@@ -208,18 +228,27 @@ pub async fn queue_track(
     app: AppHandle,
     player: State<'_, PlayerState>,
     resolver: State<'_, PlaybackResolverState>,
+    native: State<'_, NativeAudioState>,
     track: TrackVm,
     play_now: bool,
 ) -> Result<PlayerSnapshot, String> {
-    let stream = match resolver.resolve(&track.video_id).await {
-        Ok(stream) => stream,
-        Err(e) => {
-            let snapshot = player.playback_error(e.clone()).await;
+    let resolved = match resolver.resolve_native(&track.video_id).await {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            let snapshot = player.playback_error(error.clone()).await;
             emit_player(&app, &snapshot);
-            return Err(e);
+            return Err(error);
         }
     };
-    let snapshot = player.queue_track(track, play_now, stream).await;
+
+    let volume = player.snapshot().await.volume;
+    if let Err(error) = native.load(resolved.bytes.clone(), play_now, volume) {
+        let snapshot = player.playback_error(error.clone()).await;
+        emit_player(&app, &snapshot);
+        return Err(error);
+    }
+
+    let snapshot = player.queue_track(track, play_now, &resolved).await;
     emit_player(&app, &snapshot);
     Ok(snapshot)
 }
@@ -229,6 +258,7 @@ pub async fn player_control(
     app: AppHandle,
     player: State<'_, PlayerState>,
     resolver: State<'_, PlaybackResolverState>,
+    native: State<'_, NativeAudioState>,
     action: String,
     value: Option<f64>,
 ) -> Result<PlayerSnapshot, String> {
@@ -236,18 +266,39 @@ pub async fn player_control(
         "next" | "previous" => {
             let direction = if action == "next" { 1 } else { -1 };
             if let Some((index, track, autoplay)) = player.adjacent_target(direction).await {
-                let stream = resolver.resolve(&track.video_id).await?;
-                player.activate_index(index, track, stream, autoplay).await
+                let resolved = resolver.resolve_native(&track.video_id).await?;
+                let volume = player.snapshot().await.volume;
+                native.load(resolved.bytes.clone(), autoplay, volume)?;
+                player
+                    .activate_index(index, track, &resolved, autoplay)
+                    .await
             } else {
                 player.snapshot().await
             }
         }
+        "play_pause" => {
+            native.toggle()?;
+            player.control_simple("play_pause", None).await
+        }
+        "seek" => {
+            let seconds = value.ok_or_else(|| "Seek requires a position.".to_string())?;
+            native.seek(seconds)?;
+            player.control_simple("seek", Some(seconds)).await
+        }
+        "volume" => {
+            let volume = value.ok_or_else(|| "Volume requires a value.".to_string())?;
+            native.set_volume(volume)?;
+            player.control_simple("volume", Some(volume)).await
+        }
         _ => player.control_simple(&action, value).await,
     };
+
     emit_player(&app, &snapshot);
     Ok(snapshot)
 }
 
+// Legacy WebView2 playback synchronization command. Kept so an older frontend can
+// still talk to a newer backend during an update, but 0.3.7 does not use it.
 #[tauri::command]
 pub async fn sync_playback(
     app: AppHandle,
@@ -277,9 +328,9 @@ pub async fn playback_error(
 
 #[tauri::command]
 pub async fn open_mini_player(app: AppHandle) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("mini") {
-        w.show().map_err(|e| e.to_string())?;
-        w.set_focus().map_err(|e| e.to_string())?;
+    if let Some(window) = app.get_webview_window("mini") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
