@@ -37,3 +37,13 @@ jobs:
 
       - name: Rust compile check
         run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Windows NSIS test installer
+        run: npm run tauri:build -- --bundles nsis
+
+      - name: Upload test installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ytm-desktop-0.4.0-windows
+          path: src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
