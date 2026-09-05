@@ -136,8 +136,10 @@ impl PlayerState {
         if position.is_finite() {
             state.position = if ended && state.duration > 0.0 {
                 state.duration
+            } else if state.duration > 0.0 {
+                position.clamp(0.0, state.duration)
             } else {
-                position.max(0.0).min(state.duration.max(position))
+                position.max(0.0)
             };
         }
         if volume.is_finite() {
