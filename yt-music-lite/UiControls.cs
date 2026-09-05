@@ -14,7 +14,14 @@ namespace YTMusicLite
 
         public SeekBar()
         {
-            DoubleBuffered = true;
+            SetStyle(
+                ControlStyles.UserPaint |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.SupportsTransparentBackColor,
+                true);
+            UpdateStyles();
+
             Height = 18;
             BackColor = Color.Transparent;
             Cursor = Cursors.Hand;
@@ -50,6 +57,16 @@ namespace YTMusicLite
             if (!interactive || Width <= 1) return;
             Ratio = e.X / (double)Math.Max(1, Width - 1);
             if (SeekRequested != null) SeekRequested(this, EventArgs.Empty);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs pevent)
+        {
+            if (BackColor == Color.Transparent && Parent != null)
+            {
+                pevent.Graphics.Clear(Parent.BackColor);
+                return;
+            }
+            base.OnPaintBackground(pevent);
         }
 
         protected override void OnPaint(PaintEventArgs e)
