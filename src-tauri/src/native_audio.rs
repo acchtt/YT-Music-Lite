@@ -254,7 +254,9 @@ fn load_track(
         previous.stop();
     }
 
-    let decoder = Decoder::new_mp4(Cursor::new(bytes))
+    // Rodio 0.20's Decoder::new auto-detects enabled Symphonia formats. This avoids
+    // the older Decoder::new_mp4 API, which requires an Mp4Type hint in 0.20.x.
+    let decoder = Decoder::new(Cursor::new(bytes))
         .map_err(|e| format!("Native AAC/MP4 decoder could not open this track: {e}"))?;
 
     let new_sink = Sink::try_new(
