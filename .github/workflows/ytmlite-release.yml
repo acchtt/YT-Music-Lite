@@ -23,7 +23,7 @@ jobs:
         shell: pwsh
         run: .\yt-music-lite\build.ps1
 
-      - name: Main, refined player and settings smoke test
+      - name: Main, official player and settings smoke test
         shell: pwsh
         run: |
           $Root = Resolve-Path .\yt-music-lite
@@ -44,7 +44,7 @@ jobs:
           Push-Location $Build
           try {
             .\YTMusicLite.SmokeTest.exe
-            if ($LASTEXITCODE -ne 0) { throw "Main/refined-player/settings smoke test failed" }
+            if ($LASTEXITCODE -ne 0) { throw "Main/official-player/settings smoke test failed" }
           } finally {
             Pop-Location
           }
@@ -56,19 +56,17 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.1.7
+          tag_name: ytmlite-v4.1.8
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.1.7
+          name: YT Music Lite v4.1.8
           body: |
-            YT Music Lite v4.1.7
+            YT Music Lite v4.1.8
 
-            - Refines the 4.1.6 player controls so they feel like one coherent interface instead of add-on buttons.
-            - Reorganizes controls into left metadata actions, centered transport controls, and right utility controls.
-            - Replaces blocky rounded-square hover states with cleaner circular hit targets.
-            - Uses subtle active indicators rather than bright solid active buttons.
-            - Synchronizes like, dislike, shuffle, repeat, and mute state from the official YouTube Music player DOM.
-            - Improves responsive hiding and spacing so controls do not collide on narrower windows.
-            - Keeps lyrics, queue/up-next, more actions, clickable track metadata, volume, branding, Settings, tray behavior, and in-app updates.
+            - Hides the custom native bottom player bar in the main window.
+            - Restores YouTube Music's official player bar inside the WebView.
+            - Removes the custom expanded-player enhancement layer from startup.
+            - Keeps the YT Music Lite top shell, logo, navigation, mini-player, tray controls, Settings, sleep mode and in-app updater.
+            - Keeps the official YouTube Music page responsible for like/dislike, shuffle, repeat, queue, lyrics, volume and other playback actions.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.1.7-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.1.7-win-x64.zip.sha256
+            yt-music-lite/release/YTMusicLite-v4.1.8-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.1.8-win-x64.zip.sha256
