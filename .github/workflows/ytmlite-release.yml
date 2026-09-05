@@ -23,7 +23,7 @@ jobs:
         shell: pwsh
         run: .\yt-music-lite\build.ps1
 
-      - name: Main, branding, icon skin and settings smoke test
+      - name: Main, expanded player and settings smoke test
         shell: pwsh
         run: |
           $Root = Resolve-Path .\yt-music-lite
@@ -44,7 +44,7 @@ jobs:
           Push-Location $Build
           try {
             .\YTMusicLite.SmokeTest.exe
-            if ($LASTEXITCODE -ne 0) { throw "Main/branding/icon/settings smoke test failed" }
+            if ($LASTEXITCODE -ne 0) { throw "Main/expanded-player/settings smoke test failed" }
           } finally {
             Pop-Location
           }
@@ -56,17 +56,19 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.1.5
+          tag_name: ytmlite-v4.1.6
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.1.5
+          name: YT Music Lite v4.1.6
           body: |
-            YT Music Lite v4.1.5
+            YT Music Lite v4.1.6
 
-            - Adds the new YT Music Lite logo to the native top bar.
-            - Makes the current-track artwork, title and artist clickable in the native player UI.
-            - Clicking current-track metadata restores the main window and opens the current song in YouTube Music.
-            - Adds Open current track to the polished tray menu.
-            - Preserves the 4.1.4 Settings redesign, custom icon/button system, hidden YTM player chrome, startup safeguards and in-app updater.
+            - Expands the native player bar beyond previous / play-pause / next.
+            - Adds like, dislike and more-actions controls beside current-track metadata.
+            - Adds shuffle, repeat, lyrics, queue/up-next, mute/unmute, and a properly positioned volume slider.
+            - Keeps current-track artwork/title/artist clickable.
+            - Adds responsive compact behavior so secondary controls do not collide on smaller windows.
+            - Uses the hidden official YouTube Music player controls underneath, rather than a custom playback implementation.
+            - Preserves the 4.1.5 logo/branding, 4.1.4 Settings redesign, tray behavior, hidden YTM player chrome, startup safeguards and in-app updater.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.1.5-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.1.5-win-x64.zip.sha256
+            yt-music-lite/release/YTMusicLite-v4.1.6-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.1.6-win-x64.zip.sha256
