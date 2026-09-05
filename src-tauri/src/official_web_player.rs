@@ -1,4 +1,9 @@
-use std::{fs, path::PathBuf, time::Duration};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -274,9 +279,17 @@ pub async fn status(app: &AppHandle) -> Result<Option<WebMediaStatus>, String> {
 })()"#;
 
     let (tx, rx) = oneshot::channel::<String>();
+    let tx = Arc::new(Mutex::new(Some(tx)));
     window
-        .eval_with_callback(script, move |raw| {
-            let _ = tx.send(raw);
+        .eval_with_callback(script, {
+            let tx = Arc::clone(&tx);
+            move |raw| {
+                if let Ok(mut guard) = tx.lock() {
+                    if let Some(sender) = guard.take() {
+                        let _ = sender.send(raw);
+                    }
+                }
+            }
         })
         .map_err(|e| format!("Could not query the YouTube Music player: {e}"))?;
 
