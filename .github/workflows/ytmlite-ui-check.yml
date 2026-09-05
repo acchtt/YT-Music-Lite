@@ -1,0 +1,21 @@
+name: ytmlite-ui-check
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ytmlite-ui-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: ${{ !startsWith(github.event.head_commit.message, 'Publish YT Music Lite') }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Compile YT Music Lite
+        shell: pwsh
+        run: .\yt-music-lite\build.ps1
