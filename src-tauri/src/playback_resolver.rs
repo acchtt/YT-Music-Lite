@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use reqwest::{
-    header::{ORIGIN, REFERER, USER_AGENT},
+    header::{ORIGIN, RANGE, REFERER, USER_AGENT},
     Client,
 };
 use rustypipe::{
@@ -72,6 +72,7 @@ impl PlaybackResolverState {
                 .header(USER_AGENT, user_agent)
                 .header(ORIGIN, "https://www.youtube.com")
                 .header(REFERER, "https://www.youtube.com/")
+                .header(RANGE, "bytes=0-")
                 .send()
                 .await
             {
