@@ -15,6 +15,7 @@ namespace YTMusicLiteSmoke
                 using (YTMusicLite.MainForm form = new YTMusicLite.MainForm())
                 {
                     YTMusicLite.UiPolish.Attach(form);
+                    YTMusicLite.PlayerEnhancements.Attach(form);
                     form.CreateControl();
                     form.PerformLayout();
                     using (YTMusicLite.SettingsForm settings = new YTMusicLite.SettingsForm(form))
@@ -23,7 +24,7 @@ namespace YTMusicLiteSmoke
                         settings.PerformLayout();
                     }
                 }
-                Console.WriteLine("MainForm, icon skin, and SettingsForm smoke test passed.");
+                Console.WriteLine("MainForm, icon skin, expanded player controls, and SettingsForm smoke test passed.");
                 return 0;
             }
             catch (Exception ex)
