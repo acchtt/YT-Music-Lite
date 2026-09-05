@@ -23,7 +23,7 @@ jobs:
         shell: pwsh
         run: .\yt-music-lite\build.ps1
 
-      - name: Main, expanded player and settings smoke test
+      - name: Main, refined player and settings smoke test
         shell: pwsh
         run: |
           $Root = Resolve-Path .\yt-music-lite
@@ -44,7 +44,7 @@ jobs:
           Push-Location $Build
           try {
             .\YTMusicLite.SmokeTest.exe
-            if ($LASTEXITCODE -ne 0) { throw "Main/expanded-player/settings smoke test failed" }
+            if ($LASTEXITCODE -ne 0) { throw "Main/refined-player/settings smoke test failed" }
           } finally {
             Pop-Location
           }
@@ -56,19 +56,19 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.1.6
+          tag_name: ytmlite-v4.1.7
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.1.6
+          name: YT Music Lite v4.1.7
           body: |
-            YT Music Lite v4.1.6
+            YT Music Lite v4.1.7
 
-            - Expands the native player bar beyond previous / play-pause / next.
-            - Adds like, dislike and more-actions controls beside current-track metadata.
-            - Adds shuffle, repeat, lyrics, queue/up-next, mute/unmute, and a properly positioned volume slider.
-            - Keeps current-track artwork/title/artist clickable.
-            - Adds responsive compact behavior so secondary controls do not collide on smaller windows.
-            - Uses the hidden official YouTube Music player controls underneath, rather than a custom playback implementation.
-            - Preserves the 4.1.5 logo/branding, 4.1.4 Settings redesign, tray behavior, hidden YTM player chrome, startup safeguards and in-app updater.
+            - Refines the 4.1.6 player controls so they feel like one coherent interface instead of add-on buttons.
+            - Reorganizes controls into left metadata actions, centered transport controls, and right utility controls.
+            - Replaces blocky rounded-square hover states with cleaner circular hit targets.
+            - Uses subtle active indicators rather than bright solid active buttons.
+            - Synchronizes like, dislike, shuffle, repeat, and mute state from the official YouTube Music player DOM.
+            - Improves responsive hiding and spacing so controls do not collide on narrower windows.
+            - Keeps lyrics, queue/up-next, more actions, clickable track metadata, volume, branding, Settings, tray behavior, and in-app updates.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.1.6-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.1.6-win-x64.zip.sha256
+            yt-music-lite/release/YTMusicLite-v4.1.7-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.1.7-win-x64.zip.sha256
