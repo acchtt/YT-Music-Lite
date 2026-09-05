@@ -1,0 +1,2 @@
+YT Music Lite 4.1.5 release marker.
+Adds the new native logo branding and clickable current-track artwork/title/artist while preserving the 4.1.4 UI and update architecture.
