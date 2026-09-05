@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BuildDir = Join-Path $Root "build"
-$Version = "4.0.1"
+$Version = "4.0.2"
 $ReleaseDir = Join-Path $Root "release"
 $PayloadDir = Join-Path $ReleaseDir "payload"
 $ZipName = "YTMusicLite-v$Version-win-x64.zip"
@@ -47,4 +47,4 @@ Set-Content -Path $ShaPath -Value "$Hash  $ZipName" -Encoding ASCII
 
 Write-Host "Release package: $ZipPath" -ForegroundColor Green
 Write-Host "SHA-256: $Hash" -ForegroundColor Green
-Write-Host "GitHub tag expected by v4 updater: ytmlite-v$Version" -ForegroundColor Cyan
+Write-Host "GitHub tag expected by updater: ytmlite-v$Version" -ForegroundColor Cyan
