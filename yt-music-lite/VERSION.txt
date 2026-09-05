@@ -1,6 +1,6 @@
-YT Music Lite v4.1.3
+YT Music Lite v4.1.4
 Base: YTMusicLite-WebView2-Test-v3
 WebView2 SDK: 1.0.4191.47
 Architecture: C# WinForms + WebView2
 Update channel: acchtt/YT-Music-Lite / ytmlite-v*
-Changes: refined Settings UI with sidebar navigation and toggle switches; polished dark tray menu renderer; preserves native Now Playing bar, hidden YTM chrome, tray behavior, and updater
+Changes: fixes Settings sidebar/content overlap; replaces the stock dialog chrome with a custom dark settings surface; adds a cohesive custom-drawn vector icon/button set across the main shell, mini player, quick actions, and tray menu
