@@ -94,6 +94,75 @@ namespace YTMusicLite
         }
     }
 
+    public sealed class ToggleSwitch : Control
+    {
+        private bool isChecked;
+
+        public event EventHandler CheckedChanged;
+
+        public ToggleSwitch()
+        {
+            SetStyle(
+                ControlStyles.UserPaint |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer,
+                true);
+            Size = new Size(40, 22);
+            Cursor = Cursors.Hand;
+            TabStop = false;
+        }
+
+        public bool Checked
+        {
+            get { return isChecked; }
+            set
+            {
+                if (isChecked == value) return;
+                isChecked = value;
+                Invalidate();
+                if (CheckedChanged != null) CheckedChanged(this, EventArgs.Empty);
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (e.Button == MouseButtons.Left) Checked = !Checked;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            Rectangle track = new Rectangle(0, 2, Width - 1, Height - 5);
+            int radius = track.Height;
+            using (GraphicsPath path = RoundedRect(track, radius))
+            using (SolidBrush trackBrush = new SolidBrush(Checked ? Color.FromArgb(230, 45, 65) : Color.FromArgb(66, 66, 66)))
+            {
+                g.FillPath(trackBrush, path);
+            }
+
+            int knobSize = track.Height - 4;
+            int knobX = Checked ? track.Right - knobSize - 2 : track.Left + 2;
+            using (SolidBrush knobBrush = new SolidBrush(Color.White))
+            {
+                g.FillEllipse(knobBrush, knobX, track.Top + 2, knobSize, knobSize);
+            }
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle rect, int radius)
+        {
+            int diameter = Math.Max(2, radius);
+            GraphicsPath path = new GraphicsPath();
+            path.AddArc(rect.Left, rect.Top, diameter, diameter, 90, 180);
+            path.AddArc(rect.Right - diameter, rect.Top, diameter, diameter, 270, 180);
+            path.CloseFigure();
+            return path;
+        }
+    }
+
     public sealed class LiteButton : Button
     {
         public LiteButton()
@@ -107,6 +176,36 @@ namespace YTMusicLite
             Font = new Font("Segoe UI", 10f, FontStyle.Regular);
             TabStop = false;
             Cursor = Cursors.Hand;
+        }
+    }
+
+    public sealed class LiteMenuColorTable : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground { get { return Color.FromArgb(24, 24, 24); } }
+        public override Color ImageMarginGradientBegin { get { return Color.FromArgb(24, 24, 24); } }
+        public override Color ImageMarginGradientMiddle { get { return Color.FromArgb(24, 24, 24); } }
+        public override Color ImageMarginGradientEnd { get { return Color.FromArgb(24, 24, 24); } }
+        public override Color MenuItemSelected { get { return Color.FromArgb(43, 43, 43); } }
+        public override Color MenuItemBorder { get { return Color.FromArgb(43, 43, 43); } }
+        public override Color MenuBorder { get { return Color.FromArgb(52, 52, 52); } }
+        public override Color SeparatorDark { get { return Color.FromArgb(54, 54, 54); } }
+        public override Color SeparatorLight { get { return Color.FromArgb(54, 54, 54); } }
+        public override Color CheckBackground { get { return Color.FromArgb(230, 45, 65); } }
+        public override Color CheckSelectedBackground { get { return Color.FromArgb(230, 45, 65); } }
+        public override Color CheckPressedBackground { get { return Color.FromArgb(230, 45, 65); } }
+    }
+
+    public sealed class LiteMenuRenderer : ToolStripProfessionalRenderer
+    {
+        public LiteMenuRenderer() : base(new LiteMenuColorTable())
+        {
+            RoundedEdges = true;
+        }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            e.TextColor = Color.FromArgb(235, 235, 235);
+            base.OnRenderItemText(e);
         }
     }
 }
