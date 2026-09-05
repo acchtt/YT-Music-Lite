@@ -1,6 +1,6 @@
 [package]
 name = "ytm_desktop_option3"
-version = "0.3.7"
+version = "0.3.8"
 description = "Custom standalone YouTube Music desktop client"
 authors = ["YTM Desktop"]
 edition = "2021"
@@ -16,9 +16,10 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["sync", "net", "rt-multi-thread"] }
+tokio = { version = "1", features = ["sync", "net", "rt-multi-thread", "fs"] }
 ytmusic-api = "0.2.1"
-rustypipe = "0.11.4"
+rustypipe = { git = "https://github.com/TeamPiped/rustypipe.git", rev = "3f1491263929c22036429b665e370fdd2f066017" }
+rustypipe-downloader = { git = "https://github.com/TeamPiped/rustypipe.git", rev = "3f1491263929c22036429b665e370fdd2f066017", package = "rustypipe-downloader" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 rodio = { version = "0.20.1", default-features = false, features = ["symphonia-aac", "symphonia-isomp4"] }
