@@ -19,19 +19,22 @@ namespace YTMusicLite
         private readonly NotifyIcon tray;
         private readonly MiniPlayerForm miniPlayer;
         private readonly JavaScriptSerializer json;
+        private readonly UpdateService updateService;
+        private readonly string settingsPath;
+        private readonly ToolStripMenuItem minimizeToTrayItem;
         private PlayerState lastState;
         private bool initialized;
         private bool exiting;
         private bool autoSuspended;
         private bool manualSleep;
-        private readonly UpdateService updateService;
         private bool updateCheckRunning;
+        private bool minimizeToTray;
 
         public bool IsExiting { get { return exiting; } }
 
         public MainForm()
         {
-            Text = "YT Music Lite v4";
+            Text = "YT Music Lite v4.0.2";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(900, 600);
             Size = new Size(1280, 820);
@@ -41,6 +44,11 @@ namespace YTMusicLite
             json = new JavaScriptSerializer();
             lastState = new PlayerState();
             updateService = new UpdateService();
+            settingsPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "YTMusicLite",
+                "settings.ini");
+            minimizeToTray = LoadMinimizeToTraySetting();
 
             toolbar = new Panel();
             toolbar.Dock = DockStyle.Top;
@@ -54,6 +62,7 @@ namespace YTMusicLite
             x = AddToolbarButton("Home", x, delegate { NavigateHome(); });
             x = AddToolbarButton("Mini", x, delegate { ShowMiniPlayer(); });
             x = AddToolbarButton("Sleep", x, delegate { ManualSleep(); });
+            x = AddToolbarButton("Tray", x, delegate { ToggleMinimizeToTray(); });
             x = AddToolbarButton("Update", x, delegate { CheckForUpdates(true); });
 
             status = new Label();
@@ -91,6 +100,19 @@ namespace YTMusicLite
             menu.Items.Add("Mini Player", null, delegate { ShowMiniPlayer(); });
             menu.Items.Add("Play / Pause", null, delegate { TogglePlayback(); });
             menu.Items.Add("Sleep", null, delegate { ManualSleep(); });
+            minimizeToTrayItem = new ToolStripMenuItem("Minimize to tray");
+            minimizeToTrayItem.CheckOnClick = true;
+            minimizeToTrayItem.Checked = minimizeToTray;
+            minimizeToTrayItem.CheckedChanged += delegate
+            {
+                minimizeToTray = minimizeToTrayItem.Checked;
+                SaveMinimizeToTraySetting();
+                if (status != null)
+                {
+                    status.Text = minimizeToTray ? "Minimize to tray: On" : "Minimize to tray: Off";
+                }
+            };
+            menu.Items.Add(minimizeToTrayItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { ExitApplication(); });
 
@@ -125,6 +147,44 @@ namespace YTMusicLite
             button.Click += handler;
             toolbar.Controls.Add(button);
             return x + button.Width + 5;
+        }
+
+        private bool LoadMinimizeToTraySetting()
+        {
+            try
+            {
+                if (!File.Exists(settingsPath)) return true;
+                string value = File.ReadAllText(settingsPath).Trim();
+                return !string.Equals(value, "minimize_to_tray=0", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private void SaveMinimizeToTraySetting()
+        {
+            try
+            {
+                string directory = Path.GetDirectoryName(settingsPath);
+                if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+                File.WriteAllText(settingsPath, minimizeToTray ? "minimize_to_tray=1" : "minimize_to_tray=0");
+            }
+            catch
+            {
+            }
+        }
+
+        private void ToggleMinimizeToTray()
+        {
+            minimizeToTray = !minimizeToTray;
+            if (minimizeToTrayItem != null)
+            {
+                minimizeToTrayItem.Checked = minimizeToTray;
+            }
+            SaveMinimizeToTraySetting();
+            status.Text = minimizeToTray ? "Minimize to tray: On" : "Minimize to tray: Off";
         }
 
         private async Task InitializeWebViewAsync()
@@ -327,11 +387,17 @@ namespace YTMusicLite
 
             if (WindowState == FormWindowState.Minimized)
             {
-                Hide();
-                ShowMiniPlayer();
-                if (lastState.Paused)
+                if (minimizeToTray)
                 {
-                    await SuspendWebViewAsync(false);
+                    Hide();
+                    if (lastState.Paused)
+                    {
+                        await SuspendWebViewAsync(false);
+                    }
+                }
+                else
+                {
+                    WakeWebView();
                 }
             }
             else
