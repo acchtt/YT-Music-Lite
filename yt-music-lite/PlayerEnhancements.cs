@@ -80,8 +80,22 @@ namespace YTMusicLite
                 queue = AddButton(PlayerFeatureIcon.Queue, "Queue / Up next");
                 mute = AddButton(PlayerFeatureIcon.Mute, "Mute / Unmute");
 
-                like.Click += async delegate { if (await ClickLikeAsync(false)) { like.Active = !like.Active; if (like.Active) dislike.Active = false; } };
-                dislike.Click += async delegate { if (await ClickLikeAsync(true)) { dislike.Active = !dislike.Active; if (dislike.Active) like.Active = false; } };
+                like.Click += async delegate
+                {
+                    if (await ClickLikeAsync(false))
+                    {
+                        like.Active = !like.Active;
+                        if (like.Active) dislike.Active = false;
+                    }
+                };
+                dislike.Click += async delegate
+                {
+                    if (await ClickLikeAsync(true))
+                    {
+                        dislike.Active = !dislike.Active;
+                        if (dislike.Active) like.Active = false;
+                    }
+                };
                 more.Click += async delegate { await ClickMoreAsync(); };
                 shuffle.Click += async delegate { if (await ClickIntentAsync("shuffle")) shuffle.Active = !shuffle.Active; };
                 repeat.Click += async delegate { if (await ClickIntentAsync("repeat")) repeat.Active = !repeat.Active; };
@@ -136,16 +150,10 @@ namespace YTMusicLite
                 foreach (Control control in bar.Controls)
                 {
                     Label label = control as Label;
-                    if (label != null && string.Equals(label.Text, "🔊", StringComparison.Ordinal))
-                    {
-                        label.Visible = false;
-                    }
+                    if (label != null && string.Equals(label.Text, "🔊", StringComparison.Ordinal)) label.Visible = false;
 
                     IconGlyph glyph = control as IconGlyph;
-                    if (glyph != null && glyph.Icon == IconKind.Volume)
-                    {
-                        glyph.Visible = false;
-                    }
+                    if (glyph != null && glyph.Icon == IconKind.Volume) glyph.Visible = false;
                 }
             }
 
@@ -180,9 +188,9 @@ namespace YTMusicLite
                 repeat.Location = new Point(volumeX - 152, 26);
                 shuffle.Location = new Point(volumeX - 190, 26);
 
-                more.BringToFront();
                 like.BringToFront();
                 dislike.BringToFront();
+                more.BringToFront();
                 shuffle.BringToFront();
                 repeat.BringToFront();
                 lyrics.BringToFront();
@@ -192,25 +200,25 @@ namespace YTMusicLite
 
             private async Task<bool> ClickLikeAsync(bool negative)
             {
-                string index = negative ? "1" : "0";
-                string labels = negative
+                string words = negative
                     ? "['dislike','không thích','not like']"
                     : "['like','thích']";
+                string fallbackIndex = negative ? "1" : "0";
 
                 string script = @"(() => {
                     const bar = document.querySelector('ytmusic-player-bar');
                     if (!bar) return false;
                     const renderer = bar.querySelector('ytmusic-like-button-renderer');
                     if (!renderer) return false;
-                    const candidates = Array.from(renderer.querySelectorAll('button, tp-yt-paper-icon-button, yt-icon-button'));
-                    const words = " + labels + @";
-                    let button = candidates.find(b => {
-                        const label = ((b.getAttribute('aria-label') || b.title || '') + ' ' + (b.textContent || '')).toLowerCase();
-                        return words.some(w => label.indexOf(w) >= 0);
+                    const buttons = Array.from(renderer.querySelectorAll('button, tp-yt-paper-icon-button, yt-icon-button'));
+                    const words = " + words + @";
+                    let target = buttons.find(b => {
+                        const s = ((b.getAttribute('aria-label') || '') + ' ' + (b.title || '') + ' ' + (b.textContent || '')).toLowerCase();
+                        return words.some(w => s.indexOf(w) >= 0);
                     });
-                    if (!button && candidates.length > " + index + @") button = candidates[" + index + @"];
-                    if (!button) return false;
-                    button.click();
+                    if (!target && buttons.length > " + fallbackIndex + @") target = buttons[" + fallbackIndex + @"];
+                    if (!target) return false;
+                    target.click();
                     return true;
                 })();";
                 return await ExecuteBooleanAsync(script);
@@ -221,11 +229,11 @@ namespace YTMusicLite
                 const string script = @"(() => {
                     const bar = document.querySelector('ytmusic-player-bar');
                     if (!bar) return false;
-                    const menu = bar.querySelector('ytmusic-menu-renderer');
-                    if (!menu) return false;
-                    const button = menu.querySelector('button, tp-yt-paper-icon-button, yt-icon-button');
-                    if (!button) return false;
-                    button.click();
+                    const renderer = bar.querySelector('ytmusic-menu-renderer');
+                    if (!renderer) return false;
+                    const target = renderer.querySelector('button, tp-yt-paper-icon-button, yt-icon-button');
+                    if (!target) return false;
+                    target.click();
                     return true;
                 })();";
                 return await ExecuteBooleanAsync(script);
@@ -233,39 +241,24 @@ namespace YTMusicLite
 
             private async Task<bool> ClickIntentAsync(string intent)
             {
-                string selectors;
-                string tokens;
-                if (intent == "shuffle")
-                {
-                    selectors = "'[class*=shuffle], #shuffle, [aria-label*=shuffle i], [aria-label*=\\"ngẫu nhiên\\" i], [aria-label*=\\"trộn\\" i]'";
-                    tokens = "['shuffle','ngẫu nhiên','trộn']";
-                }
-                else if (intent == "repeat")
-                {
-                    selectors = "'[class*=repeat], #repeat, [aria-label*=repeat i], [aria-label*=\\"lặp\\" i]'";
-                    tokens = "['repeat','lặp']";
-                }
-                else
-                {
-                    selectors = "'[class*=queue], #queue, [aria-label*=queue i], [aria-label*=\\"hàng đợi\\" i], [aria-label*=\\"up next\\" i]'";
-                    tokens = "['queue','hàng đợi','up next']";
-                }
+                string words;
+                if (intent == "shuffle") words = "['shuffle','ngẫu nhiên','trộn']";
+                else if (intent == "repeat") words = "['repeat','lặp']";
+                else words = "['queue','hàng đợi','up next']";
 
                 string script = @"(() => {
                     const bar = document.querySelector('ytmusic-player-bar');
                     const scope = bar || document;
-                    let button = null;
-                    try { button = scope.querySelector(" + selectors + @"); } catch (_) {}
-                    if (!button) {
-                        const words = " + tokens + @";
-                        const all = Array.from(scope.querySelectorAll('button, tp-yt-paper-icon-button, yt-icon-button'));
-                        button = all.find(b => {
-                            const label = ((b.getAttribute('aria-label') || b.title || '') + ' ' + (b.textContent || '')).toLowerCase();
-                            return words.some(w => label.indexOf(w) >= 0);
-                        });
-                    }
-                    if (!button) return false;
-                    button.click();
+                    const words = " + words + @";
+                    const nodes = Array.from(scope.querySelectorAll('button, tp-yt-paper-icon-button, yt-icon-button'));
+                    const target = nodes.find(b => {
+                        const cls = typeof b.className === 'string' ? b.className : '';
+                        const id = b.id || '';
+                        const s = ((b.getAttribute('aria-label') || '') + ' ' + (b.title || '') + ' ' + (b.textContent || '') + ' ' + cls + ' ' + id).toLowerCase();
+                        return words.some(w => s.indexOf(w) >= 0);
+                    });
+                    if (!target) return false;
+                    target.click();
                     return true;
                 })();";
                 return await ExecuteBooleanAsync(script);
@@ -274,13 +267,12 @@ namespace YTMusicLite
             private async Task OpenLyricsAsync()
             {
                 OpenCurrentTrack();
-                await Task.Delay(300);
+                await Task.Delay(350);
                 const string script = @"(() => {
                     const tabs = Array.from(document.querySelectorAll('tp-yt-paper-tab, ytmusic-player-page tp-yt-paper-tab, [role=tab]'));
                     const target = tabs.find(t => {
-                        const text = (t.textContent || '').trim().toLowerCase();
-                        const label = (t.getAttribute('aria-label') || '').toLowerCase();
-                        return text.indexOf('lyrics') >= 0 || text.indexOf('lời bài hát') >= 0 || label.indexOf('lyrics') >= 0 || label.indexOf('lời bài hát') >= 0;
+                        const s = ((t.textContent || '') + ' ' + (t.getAttribute('aria-label') || '')).trim().toLowerCase();
+                        return s.indexOf('lyrics') >= 0 || s.indexOf('lời bài hát') >= 0;
                     });
                     if (!target) return false;
                     target.click();
@@ -345,31 +337,18 @@ namespace YTMusicLite
                     const string script = @"(() => {
                         const bar = document.querySelector('ytmusic-player-bar');
                         if (!bar) return false;
-                        const link = bar.querySelector('a[href*=\\"watch\\"], .title a, a.image-link');
-                        if (link) { link.click(); return true; }
-                        const target = bar.querySelector('.title, yt-formatted-string.title, img');
-                        if (target) { target.click(); return true; }
-                        return false;
+                        const links = Array.from(bar.querySelectorAll('a'));
+                        let target = links.find(a => (a.getAttribute('href') || '').indexOf('watch') >= 0);
+                        if (!target) target = bar.querySelector('.title, yt-formatted-string.title, img');
+                        if (!target) return false;
+                        target.click();
+                        return true;
                     })();";
                     web.CoreWebView2.ExecuteScriptAsync(script);
                 }
                 catch
                 {
                 }
-            }
-        }
-
-        private static T GetPrivateField<T>(object instance, string name) where T : class
-        {
-            try
-            {
-                FieldInfo field = instance.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-                if (field == null) return null;
-                return field.GetValue(instance) as T;
-            }
-            catch
-            {
-                return null;
             }
         }
     }
