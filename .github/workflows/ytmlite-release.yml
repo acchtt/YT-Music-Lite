@@ -56,16 +56,15 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.1.1
+          tag_name: ytmlite-v4.1.2
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.1.1
+          name: YT Music Lite v4.1.2
           body: |
-            YT Music Lite v4.1.1
+            YT Music Lite v4.1.2
 
-            - Fixes the 4.1.0 startup crash caused by the new transparent custom seek bars.
-            - Enables transparent-background support before applying transparent colors.
-            - Adds startup crash logging to %LOCALAPPDATA%\YTMusicLite\startup-crash.log.
-            - Keeps the complete 4.1 UI/UX redesign and updater/tray features.
+            - Hides YouTube Music's built-in bottom player chrome so the native Now Playing bar is the only visible player.
+            - Keeps YouTube Music's real player active internally for reliable playback and metadata.
+            - Preserves the complete 4.1 UI/UX redesign, startup crash fix, tray behavior, and in-app updater.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.1.1-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.1.1-win-x64.zip.sha256
+            yt-music-lite/release/YTMusicLite-v4.1.2-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.1.2-win-x64.zip.sha256
