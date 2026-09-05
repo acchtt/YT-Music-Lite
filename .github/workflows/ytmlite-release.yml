@@ -30,15 +30,18 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.0.2
+          tag_name: ytmlite-v4.1.0
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.0.2
+          name: YT Music Lite v4.1.0
           body: |
-            YT Music Lite v4.0.2
+            YT Music Lite v4.1.0
 
-            - Forces TLS 1.2 for GitHub update checks and downloads.
-            - Adds a persistent Minimize to tray option in the tray menu and toolbar.
-            - Keeps the WebView layout fix from 4.0.1.
+            - Completely redesigned native shell with cleaner navigation and spacing.
+            - Adds a persistent bottom Now Playing bar with artwork, metadata, seek, transport controls, time, and volume.
+            - Redesigns the always-on-top mini player with rounded corners and custom seek/volume controls.
+            - Moves utility actions into a dedicated Settings panel.
+            - Replaces the permanent Update button with a compact update badge.
+            - Keeps in-app GitHub updates, TLS 1.2 support, tray behavior, sleep mode, and the existing YouTube Music WebView2 profile.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.0.2-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.0.2-win-x64.zip.sha256
+            yt-music-lite/release/YTMusicLite-v4.1.0-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.1.0-win-x64.zip.sha256
