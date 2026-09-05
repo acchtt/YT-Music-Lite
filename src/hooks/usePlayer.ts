@@ -5,7 +5,7 @@ import type { PlayerState } from "../types/player";
 import type { Track } from "../types/music";
 
 const empty: PlayerState = {
-  provider: "rustypipe-htmlaudio",
+  provider: "rustypipe-native-rodio",
   queue: [],
   currentIndex: -1,
   current: null,
@@ -26,9 +26,26 @@ export function usePlayer() {
   const [state, setState] = useState<PlayerState>(empty);
 
   useEffect(() => {
-    api.player().then(setState).catch(() => {});
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const next = await api.player();
+        if (!cancelled) setState(next);
+      } catch {
+        // Keep the last good player state during transient IPC failures.
+      }
+    };
+
+    void refresh();
+    const timer = window.setInterval(refresh, 500);
     const pending = listen<PlayerState>("player-state", (event) => setState(event.payload));
-    return () => { void pending.then((unlisten) => unlisten()); };
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      void pending.then((unlisten) => unlisten());
+    };
   }, []);
 
   const control = useCallback(async (action: string, value?: number) => {
