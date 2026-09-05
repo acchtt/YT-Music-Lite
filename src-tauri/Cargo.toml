@@ -16,10 +16,9 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["sync", "net", "rt-multi-thread", "fs"] }
+tokio = { version = "1", features = ["sync", "net", "rt-multi-thread", "fs", "time"] }
 ytmusic-api = "0.2.1"
 rustypipe = { git = "https://github.com/TeamPiped/rustypipe.git", rev = "3f1491263929c22036429b665e370fdd2f066017" }
-rustypipe-downloader = { git = "https://github.com/TeamPiped/rustypipe.git", rev = "3f1491263929c22036429b665e370fdd2f066017", package = "rustypipe-downloader" }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 rodio = { version = "0.20.1", default-features = false, features = ["symphonia-aac", "symphonia-isomp4"] }
@@ -27,3 +26,9 @@ rodio = { version = "0.20.1", default-features = false, features = ["symphonia-a
 semver = "1"
 sha2 = "0.10"
 futures-util = "0.3"
+
+# RustyPipe main currently requires wreq 5.3.0, whose crates.io release was
+# yanked after publication. Pin the exact upstream v5.3.0 source so fresh CI
+# builds remain reproducible while keeping RustyPipe's current YouTube fixes.
+[patch.crates-io]
+wreq = { git = "https://github.com/0x676e67/wreq.git", rev = "893fa96f0f9003db779458a489be137890ddb1e4" }
