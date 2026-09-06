@@ -90,7 +90,7 @@ namespace YTMusicLite
             BackColor = Color.FromArgb(10, 10, 10);
             ForeColor = Color.White;
             Font = new Font("Segoe UI", 9f, FontStyle.Regular);
-            Icon = SystemIcons.Application;
+            Icon = BrandArt.CreateIcon();
 
             json = new JavaScriptSerializer();
             lastState = new PlayerState();
@@ -348,7 +348,7 @@ namespace YTMusicLite
             menu.Items.Add("Exit", null, delegate { ExitApplication(); });
 
             tray = new NotifyIcon();
-            tray.Icon = SystemIcons.Application;
+            tray.Icon = Icon;
             tray.Text = "YT Music Lite";
             tray.Visible = true;
             tray.ContextMenuStrip = menu;

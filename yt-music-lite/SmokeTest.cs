@@ -70,6 +70,21 @@ namespace YTMusicLiteSmoke
             try
             {
                 Task.Run((Func<Task>)CheckUpdatePreparation).GetAwaiter().GetResult();
+                using (Bitmap sheet = new Bitmap(576, 384))
+                using (Graphics g = Graphics.FromImage(sheet))
+                using (Font label = new Font("Segoe UI", 8f))
+                {
+                    g.Clear(BrandArt.Surface);
+                    int index = 0;
+                    foreach (IconKind kind in Enum.GetValues(typeof(IconKind)))
+                    {
+                        int x = index % 6 * 96, y = index / 6 * 96;
+                        IconArt.Draw(g, kind, new Rectangle(x + 32, y + 14, 32, 32), Color.White, 1.8f);
+                        g.DrawString(kind.ToString(), label, Brushes.LightGray, x + 12, y + 60);
+                        index++;
+                    }
+                    sheet.Save("icon-set.png");
+                }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 using (Form host = new Form())
