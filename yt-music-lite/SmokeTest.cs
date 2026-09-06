@@ -2,6 +2,8 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using YTMusicLite;
 
@@ -27,11 +29,47 @@ namespace YTMusicLiteSmoke
             }
         }
 
+        static async Task CheckUpdatePreparation()
+        {
+            string source = Path.GetTempFileName();
+            string version = "ui-test-" + Guid.NewGuid().ToString("N");
+            string preparedPath = Path.Combine(Path.GetTempPath(), "YTMusicLiteUpdate", "YTMusicLite-" + version + ".zip");
+            try
+            {
+                File.WriteAllText(source, "local update verification fixture");
+                string digest;
+                using (SHA256 sha = SHA256.Create())
+                    digest = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(source))).Replace("-", "").ToLowerInvariant();
+                UpdateService service = new UpdateService();
+                UpdateCheckResult update = new UpdateCheckResult { UpdateAvailable = true, Version = version, DownloadUrl = new Uri(source).AbsoluteUri, Sha256 = digest };
+                PreparedUpdate prepared = await service.PrepareAsync(update, null);
+                Assert(File.Exists(prepared.ZipPath), "A verified download must be prepared without installing");
+                File.AppendAllText(prepared.ZipPath, "changed after verification");
+                bool rejected = false;
+                try { service.InstallPrepared(prepared); } catch (InvalidDataException) { rejected = true; }
+                Assert(rejected, "Changed downloads must be rejected before launching the installer");
+                update.Sha256 = new string('0', 64);
+                rejected = false;
+                try { await service.PrepareAsync(update, null); } catch (InvalidDataException) { rejected = true; }
+                Assert(rejected && !File.Exists(preparedPath), "Bad checksums must reject and remove the download");
+                update.Sha256 = "";
+                rejected = false;
+                try { await service.PrepareAsync(update, null); } catch (InvalidDataException) { rejected = true; }
+                Assert(rejected && !File.Exists(preparedPath), "Missing checksums must reject and remove the download");
+            }
+            finally
+            {
+                File.Delete(source);
+                if (File.Exists(preparedPath)) File.Delete(preparedPath);
+            }
+        }
+
         [STAThread]
         static int Main()
         {
             try
             {
+                Task.Run((Func<Task>)CheckUpdatePreparation).GetAwaiter().GetResult();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 using (Form host = new Form())
@@ -104,7 +142,7 @@ namespace YTMusicLiteSmoke
                         }
                     }
                 }
-                Console.WriteLine("PASS: native forms, official player, control semantics, seeking, mini placement, tooltips, and scaled Settings captures.");
+                Console.WriteLine("PASS: update preparation and tamper rejection, native forms, official player, control semantics, seeking, mini placement, tooltips, and scaled Settings captures.");
                 return 0;
             }
             catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
