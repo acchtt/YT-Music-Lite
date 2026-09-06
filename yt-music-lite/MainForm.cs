@@ -77,7 +77,9 @@ namespace YTMusicLite
         public bool CloseToTrayEnabled { get { return closeToTray; } }
         public bool AutomaticUpdateChecksEnabled { get { return automaticUpdateChecks; } }
 
-        public MainForm()
+        public MainForm() : this(true) { }
+
+        internal MainForm(bool initializeWebView)
         {
             AutoScaleDimensions = new SizeF(6f, 13f);
             AutoScaleMode = AutoScaleMode.Font;
@@ -127,10 +129,10 @@ namespace YTMusicLite
 
             int navX = 165;
             LiteButton back = backButton = MakeTopButton("‹", navX, "Back");
-            back.Click += delegate { if (initialized && web.CanGoBack) web.GoBack(); };
+            back.Click += delegate { if (initialized && web.CanGoBack) { WakeWebView(); web.GoBack(); } };
             navX += 38;
             LiteButton forward = forwardButton = MakeTopButton("›", navX, "Forward");
-            forward.Click += delegate { if (initialized && web.CanGoForward) web.GoForward(); };
+            forward.Click += delegate { if (initialized && web.CanGoForward) { WakeWebView(); web.GoForward(); } };
             back.Enabled = forward.Enabled = false;
             navX += 38;
             LiteButton reload = MakeTopButton("↻", navX, "Reload");
@@ -360,8 +362,11 @@ namespace YTMusicLite
             Load += async delegate
             {
                 LayoutPlayerControls();
-                await InitializeWebViewAsync();
-                if (automaticUpdateChecks) CheckForUpdatesInteractive();
+                if (initializeWebView)
+                {
+                    await InitializeWebViewAsync();
+                    if (automaticUpdateChecks) CheckForUpdatesInteractive();
+                }
             };
             FormClosing += MainFormClosing;
         }
@@ -502,6 +507,7 @@ namespace YTMusicLite
 
         private void ShowState(string title, string description, string action, Action recover)
         {
+            web.Visible = false;
             stateTitle.Text = title;
             stateDescription.Text = description;
             stateAction.Text = action ?? "";
@@ -513,7 +519,7 @@ namespace YTMusicLite
             if (recover != null && Visible) stateAction.Focus();
         }
 
-        private void HideState() { statePanel.Visible = false; recoveryAction = null; }
+        private void HideState() { statePanel.Visible = false; web.Visible = true; recoveryAction = null; }
 
         private void UpdateNavigation()
         {

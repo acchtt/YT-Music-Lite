@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -12,6 +13,7 @@ namespace YTMusicLite
         public static void Attach(MainForm main)
         {
             if (main == null) return;
+            ApplyWindowTheme(main);
             MakeCurrentTrackClickable(main);
             SkinIconButtons(main);
             SkinVolumeGlyphs(main);
@@ -20,10 +22,31 @@ namespace YTMusicLite
             MiniPlayerForm mini = GetPrivateField<MiniPlayerForm>(main, "miniPlayer");
             if (mini != null)
             {
+                ApplyWindowTheme(mini);
                 MakeMiniTrackClickable(main, mini);
                 SkinIconButtons(mini);
                 SkinVolumeGlyphs(mini);
             }
+        }
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr handle, int attribute, ref int value, int size);
+
+        public static void ApplyWindowTheme(Form form)
+        {
+            Action apply = delegate
+            {
+                try
+                {
+                    int dark = 1;
+                    if (DwmSetWindowAttribute(form.Handle, 20, ref dark, sizeof(int)) != 0)
+                        DwmSetWindowAttribute(form.Handle, 19, ref dark, sizeof(int));
+                }
+                catch (DllNotFoundException) { }
+                catch (EntryPointNotFoundException) { }
+            };
+            form.HandleCreated += delegate { apply(); };
+            if (form.IsHandleCreated) apply();
         }
 
         private static void MakeCurrentTrackClickable(MainForm main)

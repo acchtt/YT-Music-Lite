@@ -19,7 +19,7 @@ The build script downloads its WebView2 SDK dependency. If the app reports a mis
 - Tab through native controls. Use Space/Enter for buttons, Space for switches, and arrow keys for sliders. Seeking moves five seconds at a time; Home/End jump to the beginning/end.
 - **Pause and sleep** pauses music and reduces resource use. **Resume** returns to the player; playback stays paused until you press Play.
 - Closing/minimizing can keep the app in the tray. Use the tray menu's **Exit** to quit, or change this behavior in Settings.
-- **Settings → About & updates** shows release notes, download progress and verification status. Download while listening, then choose **Restart to update** when ready.
+- **Settings → About and updates** shows release notes, download progress and verification status. Download while listening, then choose **Restart to update** when ready.
 
 ## Source and verification
 

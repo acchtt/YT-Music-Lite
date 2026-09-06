@@ -59,7 +59,7 @@ namespace YTMusicLiteSmoke
                     Assert(SeekBar.FormatTime(3661) == "1:01:01", "Long tracks need hours");
                 }
                 Assert(MiniPlayerForm.ClampToWorkingArea(new Point(-5000, 2000), new Size(460, 185), new Rectangle(-1920, 0, 1920, 1080)) == new Point(-1920, 895), "Restore bounds must stay on a negative-coordinate monitor");
-                using (MainForm main = new MainForm())
+                using (MainForm main = (MainForm)Activator.CreateInstance(typeof(MainForm), BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { false }, null))
                 {
                     UiPolish.Attach(main);
                     OfficialPlayerMode.Attach(main);
@@ -67,6 +67,19 @@ namespace YTMusicLiteSmoke
                     LiteButton back = Field<LiteButton>(main, "backButton");
                     Assert(back.DrawnIcon == IconKind.Back && back.TabStop && !back.Enabled, "Back button needs an icon, keyboard access and history state");
                     Assert(Field<ToolTip>(main, "tips").GetToolTip(back) == "Back", "Styling must preserve tooltips");
+                    main.Show();
+                    MethodInfo showState = typeof(MainForm).GetMethod("ShowState", BindingFlags.Instance | BindingFlags.NonPublic);
+                    bool recovered = false;
+                    showState.Invoke(main, new object[] { "Taking a break", "Music paused to save resources.", "Resume", new Action(delegate { recovered = true; }) });
+                    Application.DoEvents();
+                    Capture(main, "sleep-screen.png");
+                    Assert(Field<Panel>(main, "statePanel").Visible, "Sleep recovery must be visible");
+                    Field<LiteButton>(main, "stateAction").PerformClick();
+                    Assert(recovered, "Recovery action must be operable");
+                    showState.Invoke(main, new object[] { "Couldn’t load your music", "Check your connection, then try again.", "Retry", new Action(delegate { }) });
+                    Application.DoEvents();
+                    Capture(main, "retry-screen.png");
+                    main.Hide();
                     MiniPlayerForm mini = Field<MiniPlayerForm>(main, "miniPlayer");
                     mini.UpdatePlayer(new PlayerState { Title = "A long track title for layout verification", Artist = "Artist name", Duration = 240, CurrentTime = 61, Volume = 0.5, Paused = false });
                     LiteButton play = Field<LiteButton>(mini, "playPause");

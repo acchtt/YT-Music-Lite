@@ -27,7 +27,7 @@ namespace YTMusicLite
             Text = "YT Music Lite Mini Player";
             FormBorderStyle = FormBorderStyle.FixedToolWindow;
             StartPosition = FormStartPosition.Manual;
-            ClientSize = new Size(460, 185);
+            ClientSize = new Size(460, 150);
             MaximizeBox = false;
             MinimizeBox = false;
             TopMost = owner.MiniAlwaysOnTop;

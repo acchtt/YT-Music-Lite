@@ -22,6 +22,7 @@ namespace YTMusicLite
         public SettingsForm(MainForm mainForm)
         {
             owner = mainForm;
+            UiPolish.ApplyWindowTheme(this);
             AutoScaleDimensions = new SizeF(6f, 13f);
             AutoScaleMode = AutoScaleMode.Font;
             Text = "Settings — YT Music Lite";
@@ -47,7 +48,7 @@ namespace YTMusicLite
             shell.Controls.Add(nav, 0, 0);
             nav.Controls.Add(new Label { Text = "YT Music Lite", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(4, 0, 0, 20) });
             generalNav = MakeButton("General", delegate { ShowPage(false); });
-            aboutNav = MakeButton("About & updates", delegate { ShowPage(true); });
+            aboutNav = MakeButton("About and updates", delegate { ShowPage(true); });
             generalNav.Width = aboutNav.Width = 125;
             nav.Controls.Add(generalNav);
             nav.Controls.Add(aboutNav);
@@ -115,7 +116,7 @@ namespace YTMusicLite
 
         private TableLayoutPanel BuildAboutPage()
         {
-            TableLayoutPanel page = NewPage("About & updates", "YT Music Lite " + UpdateService.CurrentVersion + " for Windows");
+            TableLayoutPanel page = NewPage("About and updates", "YT Music Lite " + UpdateService.CurrentVersion + " for Windows");
             Add(page, new Label { Text = "Your YouTube Music library, with desktop controls close at hand.", AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 20) });
             updateStatus = new Label { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 12), AccessibleName = "Update status" };
             Add(page, updateStatus);
