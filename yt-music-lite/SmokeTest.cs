@@ -70,6 +70,21 @@ namespace YTMusicLiteSmoke
             try
             {
                 Task.Run((Func<Task>)CheckUpdatePreparation).GetAwaiter().GetResult();
+                using (Bitmap sheet = new Bitmap(576, 384))
+                using (Graphics g = Graphics.FromImage(sheet))
+                using (Font label = new Font("Segoe UI", 8f))
+                {
+                    g.Clear(BrandArt.Surface);
+                    int index = 0;
+                    foreach (IconKind kind in Enum.GetValues(typeof(IconKind)))
+                    {
+                        int x = index % 6 * 96, y = index / 6 * 96;
+                        IconArt.Draw(g, kind, new Rectangle(x + 32, y + 14, 32, 32), Color.White, 1.8f);
+                        g.DrawString(kind.ToString(), label, Brushes.LightGray, x + 12, y + 60);
+                        index++;
+                    }
+                    sheet.Save("icon-set.png");
+                }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 using (Form host = new Form())
@@ -125,7 +140,12 @@ namespace YTMusicLiteSmoke
                     Assert(Field<ToolTip>(mini, "tips").GetToolTip(play) == "Pause", "Play state must update tooltip");
                     mini.Show();
                     Application.DoEvents();
+                    Label miniArtist = Field<Label>(mini, "artist");
+                    Assert(miniArtist.Visible && miniArtist.Height >= miniArtist.Font.Height, "Artist line must remain readable");
                     Capture(mini, "mini-player.png");
+                    mini.UpdatePlayer(new PlayerState { Title = "Night Drive", Artist = "Late night radio", Duration = 240, CurrentTime = 61, Volume = 0, Paused = true });
+                    Assert(Field<LiteButton>(mini, "mute").AccessibleName == "Unmute", "Mute state needs an accurate accessible action");
+                    Capture(mini, "mini-player-paused.png");
                     mini.Hide();
                     foreach (float scale in new float[] { 1f, 1.25f, 1.5f, 2f })
                     {

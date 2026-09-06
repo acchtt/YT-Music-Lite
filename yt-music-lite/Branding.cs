@@ -1,95 +1,102 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace YTMusicLite
 {
+    public static class BrandArt
+    {
+        public static readonly Color Accent = Color.FromArgb(255, 76, 103);
+        public static readonly Color Surface = Color.FromArgb(22, 23, 29);
+        public static readonly Color Muted = Color.FromArgb(157, 160, 174);
+
+        public static GraphicsPath Rounded(RectangleF r, float radius)
+        {
+            GraphicsPath path = new GraphicsPath();
+            float d = Math.Min(radius * 2, Math.Min(r.Width, r.Height));
+            path.AddArc(r.Left, r.Top, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Top, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.Left, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        // A single musical note whose flag is a play triangle. The same geometry
+        // powers the wordmark, artwork fallback, tray and executable icon.
+        public static void DrawMark(Graphics graphics, RectangleF bounds)
+        {
+            GraphicsState state = graphics.Save();
+            graphics.TranslateTransform(bounds.X, bounds.Y);
+            graphics.ScaleTransform(bounds.Width / 64f, bounds.Height / 64f);
+            graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using (GraphicsPath tile = Rounded(new RectangleF(1, 1, 62, 62), 18))
+            using (LinearGradientBrush coral = new LinearGradientBrush(new Point(8, 0), new Point(55, 64), Color.FromArgb(255, 103, 117), Color.FromArgb(230, 37, 79)))
+                graphics.FillPath(coral, tile);
+            using (GraphicsPath note = new GraphicsPath())
+            {
+                note.AddEllipse(16, 37, 22, 15);
+                note.AddRectangle(new RectangleF(31, 16, 7, 29));
+                note.AddPolygon(new PointF[] { new PointF(38, 16), new PointF(51, 25), new PointF(38, 34) });
+                note.FillMode = FillMode.Winding;
+                graphics.FillPath(Brushes.White, note);
+            }
+            graphics.Restore(state);
+        }
+
+        public static Bitmap CreateBitmap(int size)
+        {
+            Bitmap bitmap = new Bitmap(size, size);
+            using (Graphics g = Graphics.FromImage(bitmap))
+            {
+                g.Clear(Color.Transparent);
+                DrawMark(g, new RectangleF(0, 0, size, size));
+            }
+            return bitmap;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool DestroyIcon(IntPtr handle);
+        public static Icon CreateIcon()
+        {
+            using (Bitmap bitmap = CreateBitmap(32))
+            {
+                IntPtr handle = bitmap.GetHicon();
+                try { using (Icon temporary = Icon.FromHandle(handle)) return (Icon)temporary.Clone(); }
+                finally { DestroyIcon(handle); }
+            }
+        }
+    }
+
     public sealed class BrandLogoControl : Control
     {
+        public bool MarkOnly { get; set; }
         public BrandLogoControl()
         {
-            SetStyle(
-                ControlStyles.UserPaint |
-                ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.SupportsTransparentBackColor,
-                true);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
             ForeColor = Color.White;
-            Cursor = Cursors.Hand;
             TabStop = false;
+            AccessibleName = "YT Music Lite";
             Size = new Size(150, 38);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            Graphics g = e.Graphics;
-            g.ScaleTransform(Width / 150f, Height / 38f);
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-
-            Rectangle icon = new Rectangle(1, 3, 34, 32);
-            using (GraphicsPath outer = RoundedRect(icon, 9))
-            using (LinearGradientBrush red = new LinearGradientBrush(icon, Color.FromArgb(255, 48, 70), Color.FromArgb(174, 18, 38), 55f))
+            float size = Math.Min(Height - 4, MarkOnly ? Width - 4 : Width * 0.24f);
+            BrandArt.DrawMark(e.Graphics, new RectangleF(2, (Height - size) / 2, size, size));
+            if (MarkOnly) return;
+            float scale = Height / 38f;
+            using (Font name = new Font("Segoe UI", 10f * scale, FontStyle.Bold, GraphicsUnit.Pixel))
+            using (Font lite = new Font("Segoe UI", 9f * scale, FontStyle.Regular, GraphicsUnit.Pixel))
             {
-                g.FillPath(red, outer);
+                int left = (int)(size + 10);
+                TextRenderer.DrawText(e.Graphics, "YT MUSIC", name, new Rectangle(left, (int)(Height * 0.18f), Width - left, (int)(Height * 0.38f)), Color.FromArgb(242, 243, 248), TextFormatFlags.Left | TextFormatFlags.NoPadding);
+                TextRenderer.DrawText(e.Graphics, "L I T E", lite, new Rectangle(left, (int)(Height * 0.57f), Width - left, (int)(Height * 0.33f)), BrandArt.Muted, TextFormatFlags.Left | TextFormatFlags.NoPadding);
             }
-
-            Rectangle innerRect = new Rectangle(4, 6, 28, 26);
-            using (GraphicsPath inner = RoundedRect(innerRect, 7))
-            using (SolidBrush dark = new SolidBrush(Color.FromArgb(19, 19, 22)))
-            {
-                g.FillPath(dark, inner);
-            }
-
-            using (Pen wave = new Pen(Color.FromArgb(255, 48, 70), 3f))
-            {
-                wave.StartCap = LineCap.Round;
-                wave.EndCap = LineCap.Round;
-                g.DrawLine(wave, 8, 19, 8, 23);
-                g.DrawLine(wave, 13, 16, 13, 26);
-                g.DrawLine(wave, 18, 12, 18, 30);
-            }
-
-            PointF[] play = new PointF[]
-            {
-                new PointF(22, 13),
-                new PointF(22, 27),
-                new PointF(31, 20)
-            };
-            using (SolidBrush white = new SolidBrush(Color.White))
-            {
-                g.FillPolygon(white, play);
-            }
-
-            using (Font bold = new Font("Segoe UI", 10.5f, FontStyle.Bold, GraphicsUnit.Point))
-            using (Font regular = new Font("Segoe UI", 10.5f, FontStyle.Regular, GraphicsUnit.Point))
-            using (SolidBrush redText = new SolidBrush(Color.FromArgb(255, 58, 78)))
-            using (SolidBrush whiteText = new SolidBrush(Color.FromArgb(242, 242, 242)))
-            using (SolidBrush liteText = new SolidBrush(Color.FromArgb(155, 155, 155)))
-            {
-                float x = 43f;
-                float y = 9f;
-                g.DrawString("YT", bold, redText, x, y);
-                x += g.MeasureString("YT", bold).Width - 1f;
-                g.DrawString(" Music", bold, whiteText, x, y);
-                x += g.MeasureString(" Music", bold).Width - 1f;
-                g.DrawString(" Lite", regular, liteText, x, y);
-            }
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle rect, int radius)
-        {
-            GraphicsPath path = new GraphicsPath();
-            int d = Math.Max(2, radius * 2);
-            path.AddArc(rect.Left, rect.Top, d, d, 180, 90);
-            path.AddArc(rect.Right - d, rect.Top, d, d, 270, 90);
-            path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
-            path.AddArc(rect.Left, rect.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
         }
     }
 }

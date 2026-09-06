@@ -23,7 +23,10 @@ namespace YTMusicLite
         Sleep,
         Update,
         General,
-        Info
+        Info,
+        Pin,
+        Unpin,
+        Muted
     }
 
     public enum IconButtonStyle
@@ -37,167 +40,120 @@ namespace YTMusicLite
 
     public static class IconArt
     {
+        // All glyphs share a 24-unit grid, rounded terminals, and optical padding.
         public static void Draw(Graphics g, IconKind kind, Rectangle bounds, Color color, float stroke)
         {
+            GraphicsState state = g.Save();
+            g.TranslateTransform(bounds.X, bounds.Y);
+            g.ScaleTransform(bounds.Width / 24f, bounds.Height / 24f);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            RectangleF r = new RectangleF(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-            float left = r.Left;
-            float top = r.Top;
-            float right = r.Right;
-            float bottom = r.Bottom;
-            float cx = left + r.Width / 2f;
-            float cy = top + r.Height / 2f;
-            using (Pen pen = new Pen(color, stroke))
+            using (Pen pen = new Pen(color, 1.8f))
             using (SolidBrush brush = new SolidBrush(color))
             {
-                pen.StartCap = LineCap.Round;
-                pen.EndCap = LineCap.Round;
+                pen.StartCap = pen.EndCap = LineCap.Round;
                 pen.LineJoin = LineJoin.Round;
-
-                if (kind == IconKind.Back || kind == IconKind.Forward)
+                switch (kind)
                 {
-                    float dir = kind == IconKind.Back ? -1f : 1f;
-                    float tip = cx + dir * 5f;
-                    float tail = cx - dir * 5f;
-                    g.DrawLine(pen, tail, cy - 6f, tip, cy);
-                    g.DrawLine(pen, tip, cy, tail, cy + 6f);
-                    return;
-                }
-
-                if (kind == IconKind.Reload || kind == IconKind.Update)
-                {
-                    RectangleF arc = new RectangleF(cx - 7f, cy - 7f, 14f, 14f);
-                    g.DrawArc(pen, arc, -55f, 280f);
-                    PointF p1 = new PointF(cx + 6.3f, cy - 6.1f);
-                    PointF p2 = new PointF(cx + 6.7f, cy - 1.5f);
-                    PointF p3 = new PointF(cx + 2.4f, cy - 4.2f);
-                    g.FillPolygon(brush, new PointF[] { p1, p2, p3 });
-                    if (kind == IconKind.Update)
-                    {
-                        g.DrawLine(pen, cx, cy - 3f, cx, cy + 4f);
-                        g.DrawLine(pen, cx - 3f, cy + 1f, cx, cy + 4f);
-                        g.DrawLine(pen, cx, cy + 4f, cx + 3f, cy + 1f);
-                    }
-                    return;
-                }
-
-                if (kind == IconKind.Home)
-                {
-                    g.DrawLine(pen, cx - 7f, cy - 1f, cx, cy - 7f);
-                    g.DrawLine(pen, cx, cy - 7f, cx + 7f, cy - 1f);
-                    g.DrawLine(pen, cx - 5.5f, cy - 2f, cx - 5.5f, cy + 7f);
-                    g.DrawLine(pen, cx + 5.5f, cy - 2f, cx + 5.5f, cy + 7f);
-                    g.DrawLine(pen, cx - 5.5f, cy + 7f, cx + 5.5f, cy + 7f);
-                    return;
-                }
-
-                if (kind == IconKind.MiniPlayer)
-                {
-                    g.DrawRoundedRectangle(pen, new RectangleF(cx - 8f, cy - 6f, 16f, 12f), 2.5f);
-                    g.DrawLine(pen, cx + 1f, cy + 2f, cx + 6f, cy + 2f);
-                    g.DrawLine(pen, cx + 6f, cy + 2f, cx + 6f, cy - 2f);
-                    return;
-                }
-
-                if (kind == IconKind.Settings)
-                {
-                    g.DrawEllipse(pen, cx - 3f, cy - 3f, 6f, 6f);
-                    for (int i = 0; i < 8; i++)
-                    {
-                        double a = Math.PI * i / 4.0;
-                        float x1 = cx + (float)Math.Cos(a) * 5.5f;
-                        float y1 = cy + (float)Math.Sin(a) * 5.5f;
-                        float x2 = cx + (float)Math.Cos(a) * 8f;
-                        float y2 = cy + (float)Math.Sin(a) * 8f;
-                        g.DrawLine(pen, x1, y1, x2, y2);
-                    }
-                    return;
-                }
-
-                if (kind == IconKind.Previous || kind == IconKind.Next)
-                {
-                    bool next = kind == IconKind.Next;
-                    float barX = next ? cx + 6f : cx - 6f;
-                    g.DrawLine(pen, barX, cy - 6f, barX, cy + 6f);
-                    PointF a = new PointF(next ? cx - 5f : cx + 5f, cy - 6f);
-                    PointF b = new PointF(next ? cx + 3f : cx - 3f, cy);
-                    PointF c = new PointF(next ? cx - 5f : cx + 5f, cy + 6f);
-                    g.FillPolygon(brush, new PointF[] { a, b, c });
-                    return;
-                }
-
-                if (kind == IconKind.Play)
-                {
-                    g.FillPolygon(brush, new PointF[] {
-                        new PointF(cx - 4f, cy - 7f),
-                        new PointF(cx + 7f, cy),
-                        new PointF(cx - 4f, cy + 7f)
-                    });
-                    return;
-                }
-
-                if (kind == IconKind.Pause)
-                {
-                    g.FillRectangle(brush, cx - 5f, cy - 7f, 3.5f, 14f);
-                    g.FillRectangle(brush, cx + 1.5f, cy - 7f, 3.5f, 14f);
-                    return;
-                }
-
-                if (kind == IconKind.Volume)
-                {
-                    PointF[] speaker = new PointF[] {
-                        new PointF(cx - 8f, cy - 3f),
-                        new PointF(cx - 4f, cy - 3f),
-                        new PointF(cx + 1f, cy - 7f),
-                        new PointF(cx + 1f, cy + 7f),
-                        new PointF(cx - 4f, cy + 3f),
-                        new PointF(cx - 8f, cy + 3f)
-                    };
-                    g.FillPolygon(brush, speaker);
-                    g.DrawArc(pen, cx - 1f, cy - 5f, 10f, 10f, -55f, 110f);
-                    g.DrawArc(pen, cx - 1f, cy - 8f, 16f, 16f, -50f, 100f);
-                    return;
-                }
-
-                if (kind == IconKind.Close)
-                {
-                    g.DrawLine(pen, cx - 5f, cy - 5f, cx + 5f, cy + 5f);
-                    g.DrawLine(pen, cx + 5f, cy - 5f, cx - 5f, cy + 5f);
-                    return;
-                }
-
-                if (kind == IconKind.Window)
-                {
-                    g.DrawRoundedRectangle(pen, new RectangleF(cx - 7f, cy - 6f, 14f, 12f), 2f);
-                    g.DrawLine(pen, cx - 4f, cy - 3f, cx + 4f, cy - 3f);
-                    return;
-                }
-
-                if (kind == IconKind.Sleep)
-                {
-                    g.DrawArc(pen, cx - 7f, cy - 8f, 14f, 16f, 70f, 220f);
-                    g.DrawArc(pen, cx - 1f, cy - 8f, 10f, 14f, 100f, 160f);
-                    return;
-                }
-
-                if (kind == IconKind.General)
-                {
-                    g.DrawLine(pen, cx - 7f, cy - 5f, cx + 7f, cy - 5f);
-                    g.DrawLine(pen, cx - 7f, cy, cx + 7f, cy);
-                    g.DrawLine(pen, cx - 7f, cy + 5f, cx + 7f, cy + 5f);
-                    g.FillEllipse(brush, cx - 4f, cy - 7f, 4f, 4f);
-                    g.FillEllipse(brush, cx + 1f, cy - 2f, 4f, 4f);
-                    g.FillEllipse(brush, cx - 2f, cy + 3f, 4f, 4f);
-                    return;
-                }
-
-                if (kind == IconKind.Info)
-                {
-                    g.DrawEllipse(pen, cx - 7f, cy - 7f, 14f, 14f);
-                    g.FillEllipse(brush, cx - 1.3f, cy - 4.5f, 2.6f, 2.6f);
-                    g.DrawLine(pen, cx, cy, cx, cy + 5f);
+                    case IconKind.Back:
+                    case IconKind.Forward:
+                        bool back = kind == IconKind.Back;
+                        g.DrawLines(pen, new PointF[] { new PointF(back ? 14 : 10, 5), new PointF(back ? 7 : 17, 12), new PointF(back ? 14 : 10, 19) });
+                        break;
+                    case IconKind.Reload:
+                        g.DrawArc(pen, 4, 4, 16, 16, 35, 290);
+                        g.DrawLines(pen, new PointF[] { new PointF(20, 3), new PointF(20, 8), new PointF(15, 8) });
+                        break;
+                    case IconKind.Home:
+                        g.DrawLines(pen, new PointF[] { new PointF(3, 10), new PointF(12, 3), new PointF(21, 10) });
+                        g.DrawLines(pen, new PointF[] { new PointF(5, 9), new PointF(5, 21), new PointF(10, 21), new PointF(10, 15), new PointF(14, 15), new PointF(14, 21), new PointF(19, 21), new PointF(19, 9) });
+                        break;
+                    case IconKind.MiniPlayer:
+                        using (GraphicsPath frame = BrandArt.Rounded(new RectangleF(2, 4, 20, 16), 3)) g.DrawPath(pen, frame);
+                        using (GraphicsPath inset = BrandArt.Rounded(new RectangleF(12, 11, 7, 6), 1.5f)) g.FillPath(brush, inset);
+                        break;
+                    case IconKind.Window:
+                        g.DrawLines(pen, new PointF[] { new PointF(14, 3), new PointF(21, 3), new PointF(21, 10) });
+                        g.DrawLine(pen, 21, 3, 12, 12);
+                        g.DrawLines(pen, new PointF[] { new PointF(10, 4), new PointF(4, 4), new PointF(4, 20), new PointF(20, 20), new PointF(20, 14) });
+                        break;
+                    case IconKind.Settings:
+                        PointF[] gear = new PointF[32];
+                        for (int i = 0; i < gear.Length; i++)
+                        {
+                            double angle = i * Math.PI / 16;
+                            float radius = i % 4 == 0 || i % 4 == 3 ? 9.5f : 7.5f;
+                            gear[i] = new PointF(12 + (float)Math.Cos(angle) * radius, 12 + (float)Math.Sin(angle) * radius);
+                        }
+                        g.DrawPolygon(pen, gear);
+                        g.DrawEllipse(pen, 9, 9, 6, 6);
+                        break;
+                    case IconKind.Previous:
+                    case IconKind.Next:
+                        bool next = kind == IconKind.Next;
+                        g.DrawLine(pen, next ? 19 : 5, 5, next ? 19 : 5, 19);
+                        g.FillPolygon(brush, new PointF[] { new PointF(next ? 5 : 19, 5), new PointF(next ? 15 : 9, 12), new PointF(next ? 5 : 19, 19) });
+                        break;
+                    case IconKind.Play:
+                        using (GraphicsPath play = new GraphicsPath())
+                        {
+                            play.AddLines(new PointF[] { new PointF(7, 4), new PointF(20, 12), new PointF(7, 20) });
+                            play.CloseFigure();
+                            g.FillPath(brush, play);
+                        }
+                        break;
+                    case IconKind.Pause:
+                        using (GraphicsPath left = BrandArt.Rounded(new RectangleF(6, 4, 4, 16), 1.5f)) g.FillPath(brush, left);
+                        using (GraphicsPath right = BrandArt.Rounded(new RectangleF(14, 4, 4, 16), 1.5f)) g.FillPath(brush, right);
+                        break;
+                    case IconKind.Volume:
+                    case IconKind.Muted:
+                        g.DrawPolygon(pen, new PointF[] { new PointF(3, 9), new PointF(7, 9), new PointF(12, 5), new PointF(12, 19), new PointF(7, 15), new PointF(3, 15) });
+                        if (kind == IconKind.Volume)
+                        {
+                            g.DrawArc(pen, 11, 7, 8, 10, -65, 130);
+                            g.DrawArc(pen, 10, 3, 13, 18, -60, 120);
+                        }
+                        else { g.DrawLine(pen, 17, 9, 22, 15); g.DrawLine(pen, 22, 9, 17, 15); }
+                        break;
+                    case IconKind.Close:
+                        g.DrawLine(pen, 6, 6, 18, 18); g.DrawLine(pen, 18, 6, 6, 18);
+                        break;
+                    case IconKind.Sleep:
+                        using (GraphicsPath moon = new GraphicsPath())
+                        {
+                            moon.AddBezier(19, 15, 11, 18, 5, 10, 10, 3);
+                            moon.AddBezier(10, 3, -1, 5, 1, 21, 12, 21);
+                            moon.AddBezier(12, 21, 16, 21, 18, 18, 19, 15);
+                            g.DrawPath(pen, moon);
+                        }
+                        break;
+                    case IconKind.Update:
+                        g.DrawLine(pen, 12, 3, 12, 15);
+                        g.DrawLines(pen, new PointF[] { new PointF(7, 10), new PointF(12, 15), new PointF(17, 10) });
+                        g.DrawLines(pen, new PointF[] { new PointF(4, 16), new PointF(4, 21), new PointF(20, 21), new PointF(20, 16) });
+                        break;
+                    case IconKind.Pin:
+                    case IconKind.Unpin:
+                        g.DrawLines(pen, new PointF[] { new PointF(8, 3), new PointF(16, 3), new PointF(16, 9), new PointF(19, 13), new PointF(5, 13), new PointF(8, 9), new PointF(8, 3) });
+                        g.DrawLine(pen, 12, 13, 12, 21);
+                        if (kind == IconKind.Unpin) g.DrawLine(pen, 3, 3, 21, 21);
+                        break;
+                    case IconKind.General:
+                        for (int i = 0; i < 3; i++)
+                        {
+                            int x = 5 + i * 7, y = i == 1 ? 15 : 8;
+                            g.DrawLine(pen, x, 3, x, y - 3); g.DrawLine(pen, x, y + 3, x, 21);
+                            g.DrawEllipse(pen, x - 3, y - 3, 6, 6);
+                        }
+                        break;
+                    case IconKind.Info:
+                        g.DrawEllipse(pen, 3, 3, 18, 18);
+                        g.FillEllipse(brush, 11, 6, 2, 2);
+                        g.DrawLine(pen, 12, 11, 12, 17);
+                        break;
                 }
             }
+            g.Restore(state);
         }
 
         public static Bitmap CreateBitmap(IconKind kind, int size, Color color)
@@ -580,7 +536,7 @@ namespace YTMusicLite
             int right = Math.Max(4, Width - 4);
             int fill = 4 + (int)Math.Round((right - 4) * ratio);
             using (Pen background = new Pen(Color.FromArgb(67, 67, 67), 3f))
-            using (Pen foreground = new Pen(interactive && Enabled ? Color.FromArgb(238, 47, 67) : Color.FromArgb(100, 100, 100), 3f))
+            using (Pen foreground = new Pen(interactive && Enabled ? BrandArt.Accent : Color.FromArgb(100, 100, 100), 3f))
             {
                 g.DrawLine(background, 4, y, right, y);
                 if (fill > 4) g.DrawLine(foreground, 4, y, fill, y);
@@ -615,7 +571,7 @@ namespace YTMusicLite
                 path.AddArc(track.Left, track.Top, diameter, diameter, 90, 180);
                 path.AddArc(track.Right - diameter, track.Top, diameter, diameter, 270, 180);
                 path.CloseFigure();
-                using (SolidBrush brush = new SolidBrush(Enabled && Checked ? Color.FromArgb(238, 47, 67) : Color.FromArgb(80, 80, 80))) g.FillPath(brush, path);
+                using (SolidBrush brush = new SolidBrush(Enabled && Checked ? BrandArt.Accent : Color.FromArgb(80, 80, 80))) g.FillPath(brush, path);
             }
             int knob = track.Height - 4;
             int x = Checked ? track.Right - knob - 2 : track.Left + 2;
@@ -627,19 +583,40 @@ namespace YTMusicLite
     public sealed class LiteButton : Button
     {
         private IconKind? drawnIcon;
+        private bool pressed;
+        private bool selected;
+        public bool Selected { get { return selected; } set { selected = value; Invalidate(); } }
         public IconKind? DrawnIcon { get { return drawnIcon; } set { drawnIcon = value; Invalidate(); } }
         public IconButtonStyle IconStyle { get; set; }
+        protected override void OnMouseDown(MouseEventArgs e) { pressed = e.Button == MouseButtons.Left; base.OnMouseDown(e); Invalidate(); }
+        protected override void OnMouseUp(MouseEventArgs e) { pressed = false; base.OnMouseUp(e); Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e) { pressed = false; base.OnMouseLeave(e); Invalidate(); }
+        protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode == Keys.Space) pressed = true; base.OnKeyDown(e); Invalidate(); }
+        protected override void OnKeyUp(KeyEventArgs e) { pressed = false; base.OnKeyUp(e); Invalidate(); }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             if (!drawnIcon.HasValue) { base.OnPaint(e); return; }
             bool hover = ClientRectangle.Contains(PointToClient(Cursor.Position));
-            Color background = IconStyle == IconButtonStyle.Light ? Color.FromArgb(245, 245, 245) : hover && Enabled ? Color.FromArgb(40, 40, 40) : Parent.BackColor;
-            e.Graphics.Clear(background);
-            Color foreground = !Enabled ? Color.FromArgb(95, 95, 95) : IconStyle == IconButtonStyle.Light ? Color.FromArgb(18, 18, 18) : Color.FromArgb(220, 220, 220);
-            int size = Math.Min(20, Math.Min(Width, Height) - 10);
-            IconArt.Draw(e.Graphics, drawnIcon.Value, new Rectangle((Width - size) / 2, (Height - size) / 2, size, size), foreground, 1.7f);
-            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -3, -3), foreground, background);
+            Color surface = Parent == null ? BackColor : Parent.BackColor;
+            e.Graphics.Clear(surface);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            bool primary = IconStyle == IconButtonStyle.Light || IconStyle == IconButtonStyle.Accent;
+            Color fill = primary ? (pressed ? Color.FromArgb(223, 53, 83) : hover ? Color.FromArgb(255, 103, 124) : BrandArt.Accent) : Selected ? Color.FromArgb(63, 33, 45) : Color.FromArgb(38, 40, 49);
+            if (primary || hover || Selected || pressed)
+            {
+                using (SolidBrush brush = new SolidBrush(fill))
+                {
+                    if (primary) e.Graphics.FillEllipse(brush, 2, 2, Width - 4, Height - 4);
+                    else using (GraphicsPath path = BrandArt.Rounded(new RectangleF(2, 2, Width - 4, Height - 4), 9)) e.Graphics.FillPath(brush, path);
+                }
+            }
+            Color foreground = !Enabled ? Color.FromArgb(87, 90, 102) : Selected ? BrandArt.Accent : Color.FromArgb(239, 240, 247);
+            int size = Math.Max(12, (int)(Math.Min(Width, Height) * (primary ? 0.44f : 0.53f)));
+            IconArt.Draw(e.Graphics, drawnIcon.Value, new Rectangle((Width - size) / 2, (Height - size) / 2, size, size), foreground, 1.8f);
+            if (Focused && ShowFocusCues)
+                using (Pen focus = new Pen(Color.FromArgb(230, 233, 246), 1.5f))
+                using (GraphicsPath path = BrandArt.Rounded(new RectangleF(1, 1, Width - 3, Height - 3), primary ? Width / 2 : 9)) e.Graphics.DrawPath(focus, path);
         }
         public LiteButton()
         {
@@ -666,9 +643,9 @@ namespace YTMusicLite
         public override Color MenuBorder { get { return Color.FromArgb(52, 52, 52); } }
         public override Color SeparatorDark { get { return Color.FromArgb(54, 54, 54); } }
         public override Color SeparatorLight { get { return Color.FromArgb(54, 54, 54); } }
-        public override Color CheckBackground { get { return Color.FromArgb(238, 47, 67); } }
-        public override Color CheckSelectedBackground { get { return Color.FromArgb(238, 47, 67); } }
-        public override Color CheckPressedBackground { get { return Color.FromArgb(238, 47, 67); } }
+        public override Color CheckBackground { get { return BrandArt.Accent; } }
+        public override Color CheckSelectedBackground { get { return BrandArt.Accent; } }
+        public override Color CheckPressedBackground { get { return BrandArt.Accent; } }
     }
 
     public sealed class LiteMenuRenderer : ToolStripProfessionalRenderer

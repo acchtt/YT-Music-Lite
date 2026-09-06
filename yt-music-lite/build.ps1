@@ -41,6 +41,13 @@ if (-not $Csc) {
     throw ".NET Framework C# compiler was not found. Install .NET Framework 4.8 developer tools."
 }
 
+$AssetTool = Join-Path $BuildDir "BuildBrandAssets.exe"
+& $Csc /nologo /target:exe /langversion:5 /out:$AssetTool /reference:System.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll (Join-Path $Root "Branding.cs") (Join-Path $Root "BuildBrandAssets.cs")
+if ($LASTEXITCODE -ne 0) { throw "Brand asset compilation failed" }
+& $AssetTool $BuildDir
+if ($LASTEXITCODE -ne 0) { throw "Brand asset generation failed" }
+$BrandIcon = Join-Path $BuildDir "YTMusicLite.ico"
+
 $Out = Join-Path $BuildDir "YTMusicLite.exe"
 $Sources = @(
     (Join-Path $Root "Program.cs"),
@@ -64,6 +71,7 @@ $Args = @(
     "/optimize+",
     "/langversion:5",
     "/out:$Out",
+    "/win32icon:$BrandIcon",
     "/reference:System.dll",
     "/reference:System.Core.dll",
     "/reference:System.Drawing.dll",
