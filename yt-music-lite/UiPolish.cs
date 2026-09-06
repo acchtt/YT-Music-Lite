@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -12,7 +13,7 @@ namespace YTMusicLite
         public static void Attach(MainForm main)
         {
             if (main == null) return;
-            ApplyBranding(main);
+            ApplyWindowTheme(main);
             MakeCurrentTrackClickable(main);
             SkinIconButtons(main);
             SkinVolumeGlyphs(main);
@@ -21,34 +22,31 @@ namespace YTMusicLite
             MiniPlayerForm mini = GetPrivateField<MiniPlayerForm>(main, "miniPlayer");
             if (mini != null)
             {
+                ApplyWindowTheme(mini);
                 MakeMiniTrackClickable(main, mini);
                 SkinIconButtons(mini);
                 SkinVolumeGlyphs(mini);
             }
         }
 
-        private static void ApplyBranding(MainForm main)
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr handle, int attribute, ref int value, int size);
+
+        public static void ApplyWindowTheme(Form form)
         {
-            Panel topBar = GetPrivateField<Panel>(main, "topBar");
-            if (topBar == null) return;
-
-            List<Label> labels = new List<Label>();
-            CollectLabels(topBar, labels);
-            foreach (Label label in labels)
+            Action apply = delegate
             {
-                if (label.Text == "●" || label.Text == "YT Music Lite") label.Visible = false;
-            }
-
-            BrandLogoControl logo = new BrandLogoControl();
-            logo.Location = new Point(8, 8);
-            logo.Size = new Size(150, 38);
-            logo.Click += delegate
-            {
-                WebView2 web = GetPrivateField<WebView2>(main, "web");
-                if (web != null && web.CoreWebView2 != null) web.CoreWebView2.Navigate("https://music.youtube.com/");
+                try
+                {
+                    int dark = 1;
+                    if (DwmSetWindowAttribute(form.Handle, 20, ref dark, sizeof(int)) != 0)
+                        DwmSetWindowAttribute(form.Handle, 19, ref dark, sizeof(int));
+                }
+                catch (DllNotFoundException) { }
+                catch (EntryPointNotFoundException) { }
             };
-            topBar.Controls.Add(logo);
-            logo.BringToFront();
+            form.HandleCreated += delegate { apply(); };
+            if (form.IsHandleCreated) apply();
         }
 
         private static void MakeCurrentTrackClickable(MainForm main)
@@ -124,37 +122,21 @@ namespace YTMusicLite
                 IconKind kind;
                 if (!TryMapIcon(original.Text, out kind)) continue;
 
-                Control parent = original.Parent;
-                if (parent == null) continue;
-
-                IconButton replacement = new IconButton();
-                replacement.Icon = kind;
-                replacement.Location = original.Location;
-                replacement.Size = original.Size;
-                replacement.Anchor = original.Anchor;
-                replacement.BackColor = parent.BackColor;
-                replacement.ForeColor = Color.FromArgb(218, 218, 218);
-                replacement.ButtonStyle = PickStyle(original.Text, original);
-                replacement.AccessibleName = string.IsNullOrEmpty(original.AccessibleName) ? original.Text : original.AccessibleName;
-                replacement.TabStop = false;
-
-                parent.Controls.Add(replacement);
-                replacement.BringToFront();
-                original.Visible = false;
-
-                LiteButton capturedOriginal = original;
-                IconButton capturedReplacement = replacement;
-                replacement.Click += delegate { RaiseClick(capturedOriginal); };
-                original.LocationChanged += delegate { capturedReplacement.Location = capturedOriginal.Location; };
-                original.SizeChanged += delegate { capturedReplacement.Size = capturedOriginal.Size; };
-                original.VisibleChanged += delegate
-                {
-                    if (capturedOriginal.Visible) capturedOriginal.Visible = false;
-                };
+                // Style the real button instead of layering a second control over it.
+                // This preserves its click handler, tooltip, tab order and layout ownership.
+                original.DrawnIcon = kind;
+                original.IconStyle = PickStyle(original.Text, original);
+                LiteButton button = original;
                 original.TextChanged += delegate
                 {
                     IconKind changed;
-                    if (TryMapIcon(capturedOriginal.Text, out changed)) capturedReplacement.Icon = changed;
+                    if (TryMapIcon(button.Text, out changed)) button.DrawnIcon = changed;
+                    if (changed == IconKind.Play || changed == IconKind.Pause)
+                    {
+                        button.AccessibleName = changed == IconKind.Play ? "Play" : "Pause";
+                        ToolTip tips = GetPrivateField<ToolTip>(root, "tips");
+                        if (tips != null) tips.SetToolTip(button, button.AccessibleName);
+                    }
                 };
             }
         }
@@ -262,7 +244,7 @@ namespace YTMusicLite
             if (text == "Mini player") { kind = IconKind.MiniPlayer; return true; }
             if (text == "Open current track") { kind = IconKind.Play; return true; }
             if (text == "Play / Pause") { kind = IconKind.Play; return true; }
-            if (text == "Sleep") { kind = IconKind.Sleep; return true; }
+            if (text == "Pause and sleep") { kind = IconKind.Sleep; return true; }
             if (text == "Settings") { kind = IconKind.Settings; return true; }
             if (text == "Exit") { kind = IconKind.Close; return true; }
             return false;

@@ -68,6 +68,7 @@ $Args = @(
     "/reference:System.Core.dll",
     "/reference:System.Drawing.dll",
     "/reference:System.Windows.Forms.dll",
+    "/reference:Accessibility.dll",
     "/reference:System.Web.Extensions.dll",
     "/reference:$Core",
     "/reference:$WinForms"

@@ -37,6 +37,7 @@ jobs:
             /out:"$Build\YTMusicLite.SmokeTest.exe" `
             /reference:System.dll `
             /reference:System.Core.dll `
+            /reference:Accessibility.dll /reference:System.Drawing.dll `
             /reference:System.Windows.Forms.dll `
             /reference:"$Build\YTMusicLite.exe" `
             (Join-Path $Root "SmokeTest.cs")

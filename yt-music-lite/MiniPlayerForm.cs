@@ -1,7 +1,5 @@
 using System;
 using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace YTMusicLite
@@ -15,184 +13,109 @@ namespace YTMusicLite
         private readonly LiteButton playPause;
         private readonly SeekBar progress;
         private readonly SeekBar volume;
-        private readonly ToolTip tips;
+        private readonly Label time;
+        private readonly CheckBox pin;
+        private readonly ToolTip tips = new ToolTip();
         private string artworkUrl = "";
-        private bool updating;
-
-        [DllImport("user32.dll")]
-        private static extern bool ReleaseCapture();
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("gdi32.dll")]
-        private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int width, int height);
-
-        [DllImport("gdi32.dll")]
-        private static extern bool DeleteObject(IntPtr handle);
+        private bool positioning;
 
         public MiniPlayerForm(MainForm mainForm)
         {
             owner = mainForm;
+            AutoScaleDimensions = new SizeF(6f, 13f);
+            AutoScaleMode = AutoScaleMode.Font;
             Text = "YT Music Lite Mini Player";
-            FormBorderStyle = FormBorderStyle.None;
+            FormBorderStyle = FormBorderStyle.FixedToolWindow;
             StartPosition = FormStartPosition.Manual;
-            Size = new Size(430, 132);
-            MinimumSize = Size;
-            MaximumSize = Size;
-            TopMost = true;
+            ClientSize = new Size(460, 150);
+            MaximizeBox = false;
+            MinimizeBox = false;
+            TopMost = owner.MiniAlwaysOnTop;
             ShowInTaskbar = false;
             BackColor = Color.FromArgb(18, 18, 18);
             ForeColor = Color.White;
-            Font = new Font("Segoe UI", 9f, FontStyle.Regular);
-            Opacity = 0.99;
-            tips = new ToolTip();
+            Font = new Font("Segoe UI", 9f);
 
-            artwork = new PictureBox();
-            artwork.Location = new Point(12, 12);
-            artwork.Size = new Size(108, 108);
-            artwork.SizeMode = PictureBoxSizeMode.Zoom;
-            artwork.BackColor = Color.FromArgb(31, 31, 31);
-            Controls.Add(artwork);
+            TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 2, RowCount = 4 };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            Controls.Add(layout);
 
-            title = new Label();
-            title.Location = new Point(136, 15);
-            title.Size = new Size(240, 23);
-            title.Font = new Font("Segoe UI", 10.5f, FontStyle.Bold);
-            title.AutoEllipsis = true;
-            title.Text = "Nothing playing";
-            Controls.Add(title);
-
-            artist = new Label();
-            artist.Location = new Point(136, 39);
-            artist.Size = new Size(240, 19);
-            artist.ForeColor = Color.FromArgb(158, 158, 158);
-            artist.AutoEllipsis = true;
-            artist.Text = "YouTube Music";
-            Controls.Add(artist);
-
-            LiteButton previous = MakeButton("⏮", 136, 67, 38, 34, "Previous");
-            playPause = MakeButton("▶", 181, 63, 42, 42, "Play / Pause");
+            artwork = new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(31, 31, 31), Margin = new Padding(0, 0, 12, 12) };
+            layout.Controls.Add(artwork, 0, 0);
+            layout.SetRowSpan(artwork, 3);
+            title = new Label { Text = "Nothing playing", Dock = DockStyle.Fill, AutoEllipsis = true, Font = new Font("Segoe UI", 11f, FontStyle.Bold) };
+            artist = new Label { Text = "Choose a song in YouTube Music", Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = Color.FromArgb(175, 175, 175) };
+            layout.Controls.Add(title, 1, 0);
+            layout.Controls.Add(artist, 1, 1);
+            FlowLayoutPanel transport = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
+            layout.Controls.Add(transport, 1, 2);
+            MakeButton(transport, "⏮", "Previous track", delegate { owner.PreviousTrack(); });
+            playPause = MakeButton(transport, "▶", "Play", delegate { owner.TogglePlayback(); });
             playPause.BackColor = Color.White;
             playPause.ForeColor = Color.Black;
-            playPause.FlatAppearance.MouseOverBackColor = Color.FromArgb(230, 230, 230);
-            LiteButton next = MakeButton("⏭", 230, 67, 38, 34, "Next");
-            LiteButton showMain = MakeButton("▣", 276, 67, 38, 34, "Show main window");
-            LiteButton close = MakeButton("×", 391, 7, 30, 28, "Hide mini player");
+            MakeButton(transport, "⏭", "Next track", delegate { owner.NextTrack(); });
+            MakeButton(transport, "▣", "Show main window", delegate { owner.RestoreMainWindow(); });
+            pin = new CheckBox { Text = "On top", Checked = TopMost, AutoSize = true, Margin = new Padding(8, 12, 0, 0), AccessibleName = "Always on top" };
+            pin.CheckedChanged += delegate { owner.SetMiniAlwaysOnTop(pin.Checked); };
+            tips.SetToolTip(pin, "Keep the mini player above other windows");
+            transport.Controls.Add(pin);
 
-            previous.Click += delegate { owner.PreviousTrack(); };
-            playPause.Click += delegate { owner.TogglePlayback(); };
-            next.Click += delegate { owner.NextTrack(); };
-            showMain.Click += delegate { owner.RestoreMainWindow(); };
-            close.Click += delegate { Hide(); };
+            TableLayoutPanel timeline = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Margin = Padding.Empty };
+            timeline.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            timeline.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            timeline.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+            timeline.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            timeline.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.Controls.Add(timeline, 0, 3);
+            layout.SetColumnSpan(timeline, 2);
+            progress = new SeekBar { Dock = DockStyle.Fill, AccessibleName = "Playback position", Interactive = false };
+            progress.SeekRequested += delegate { owner.SeekToRatio(progress.Ratio); };
+            timeline.Controls.Add(progress, 0, 0);
+            Label volumeLabel = new Label { Text = "Volume", AutoSize = true, Anchor = AnchorStyles.None, ForeColor = Color.FromArgb(175, 175, 175) };
+            timeline.Controls.Add(volumeLabel, 1, 0);
+            volume = new SeekBar { Dock = DockStyle.Fill, AccessibleName = "Volume", Ratio = 1 };
+            volume.SeekRequested += delegate { owner.SetVolume(volume.Ratio); };
+            timeline.Controls.Add(volume, 2, 0);
+            time = new Label { Text = "0:00 / 0:00", AutoSize = true, ForeColor = Color.FromArgb(175, 175, 175) };
+            timeline.Controls.Add(time, 0, 1);
 
-            progress = new SeekBar();
-            progress.Location = new Point(136, 106);
-            progress.Size = new Size(177, 18);
-            progress.SeekRequested += delegate
-            {
-                if (!updating) owner.SeekToRatio(progress.Ratio);
-            };
-            Controls.Add(progress);
-
-            Label volumeIcon = new Label();
-            volumeIcon.Text = "🔊";
-            volumeIcon.TextAlign = ContentAlignment.MiddleCenter;
-            volumeIcon.ForeColor = Color.FromArgb(170, 170, 170);
-            volumeIcon.Location = new Point(320, 103);
-            volumeIcon.Size = new Size(26, 22);
-            Controls.Add(volumeIcon);
-
-            volume = new SeekBar();
-            volume.Location = new Point(346, 106);
-            volume.Size = new Size(72, 18);
-            volume.Ratio = 1;
-            volume.SeekRequested += delegate
-            {
-                if (!updating) owner.SetVolume(volume.Ratio);
-            };
-            Controls.Add(volume);
-
-            MouseDown += DragWindow;
-            title.MouseDown += DragWindow;
-            artist.MouseDown += DragWindow;
-            artwork.MouseDown += DragWindow;
-
-            SizeChanged += delegate { ApplyRoundedRegion(); };
-            Shown += delegate { ApplyRoundedRegion(); };
-            Paint += DrawBorder;
-
+            // The native caption is the drag handle; artwork/title retain their click action.
+            ResizeEnd += delegate { if (!positioning && Visible) owner.RememberMiniLocation(Location); };
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
-                if (!owner.IsExiting)
-                {
-                    e.Cancel = true;
-                    Hide();
-                }
+                if (!owner.IsExiting) { e.Cancel = true; owner.RememberMiniLocation(Location); Hide(); }
             };
         }
 
-        private LiteButton MakeButton(string text, int x, int y, int width, int height, string tip)
+        private LiteButton MakeButton(Control parent, string text, string name, Action click)
         {
-            LiteButton button = new LiteButton();
-            button.Text = text;
-            button.Font = new Font("Segoe UI Symbol", 11f, FontStyle.Regular);
-            button.Location = new Point(x, y);
-            button.Size = new Size(width, height);
-            Controls.Add(button);
-            tips.SetToolTip(button, tip);
+            LiteButton button = new LiteButton { Text = text, AccessibleName = name, Size = new Size(38, 38), Margin = new Padding(0, 0, 5, 0) };
+            button.Click += delegate { click(); };
+            tips.SetToolTip(button, name);
+            parent.Controls.Add(button);
             return button;
         }
 
-        private void ApplyRoundedRegion()
+        public static Point ClampToWorkingArea(Point location, Size size, Rectangle work)
         {
-            IntPtr region = CreateRoundRectRgn(0, 0, Width + 1, Height + 1, 18, 18);
-            try
-            {
-                Region = System.Drawing.Region.FromHrgn(region);
-            }
-            finally
-            {
-                DeleteObject(region);
-            }
-        }
-
-        private void DrawBorder(object sender, PaintEventArgs e)
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using (Pen border = new Pen(Color.FromArgb(55, 55, 55), 1f))
-            using (GraphicsPath path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 14))
-            {
-                e.Graphics.DrawPath(border, path);
-            }
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle bounds, int radius)
-        {
-            GraphicsPath path = new GraphicsPath();
-            int d = radius * 2;
-            path.AddArc(bounds.Left, bounds.Top, d, d, 180, 90);
-            path.AddArc(bounds.Right - d, bounds.Top, d, d, 270, 90);
-            path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
-            path.AddArc(bounds.Left, bounds.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
-        }
-
-        private void DragWindow(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                ReleaseCapture();
-                SendMessage(Handle, 0xA1, new IntPtr(2), IntPtr.Zero);
-            }
+            return new Point(Math.Max(work.Left, Math.Min(location.X, work.Right - size.Width)), Math.Max(work.Top, Math.Min(location.Y, work.Bottom - size.Height)));
         }
 
         public void ShowNearTaskbar()
         {
-            Rectangle work = Screen.PrimaryScreen.WorkingArea;
-            Location = new Point(work.Right - Width - 18, work.Bottom - Height - 18);
+            positioning = true;
+            // Show first so initial font/DPI scaling has determined the final bounds.
             if (!Visible) Show();
+            Rectangle work = owner.MiniLocation.HasValue ? Screen.FromPoint(owner.MiniLocation.Value).WorkingArea : Screen.FromControl(owner).WorkingArea;
+            Point desired = owner.MiniLocation ?? new Point(work.Right - Width - 18, work.Bottom - Height - 18);
+            Location = ClampToWorkingArea(desired, Size, work);
+            pin.Checked = owner.MiniAlwaysOnTop;
+            positioning = false;
             BringToFront();
             Activate();
         }
@@ -200,21 +123,24 @@ namespace YTMusicLite
         public void UpdatePlayer(PlayerState state)
         {
             if (state == null) return;
-            updating = true;
             title.Text = string.IsNullOrWhiteSpace(state.Title) ? "Nothing playing" : state.Title;
-            artist.Text = string.IsNullOrWhiteSpace(state.Artist) ? "YouTube Music" : state.Artist;
+            artist.Text = string.IsNullOrWhiteSpace(state.Artist) ? "Choose a song in YouTube Music" : state.Artist;
+            playPause.AccessibleName = state.Paused ? "Play" : "Pause";
             playPause.Text = state.Paused ? "▶" : "❚❚";
+            progress.Duration = state.Duration;
             progress.Ratio = state.Duration > 0 ? state.CurrentTime / state.Duration : 0;
             progress.Interactive = state.Duration > 0;
             volume.Ratio = state.Volume;
-            updating = false;
-
-            if (!string.IsNullOrWhiteSpace(state.ArtworkUrl) && !string.Equals(artworkUrl, state.ArtworkUrl, StringComparison.Ordinal))
+            time.Text = SeekBar.FormatTime(state.CurrentTime) + " / " + SeekBar.FormatTime(state.Duration);
+            if (!string.Equals(artworkUrl, state.ArtworkUrl, StringComparison.Ordinal))
             {
-                artworkUrl = state.ArtworkUrl;
-                try { artwork.LoadAsync(artworkUrl); }
-                catch { }
+                artworkUrl = state.ArtworkUrl ?? "";
+                artwork.CancelAsync();
+                if (string.IsNullOrWhiteSpace(artworkUrl)) artwork.Image = null;
+                else { try { artwork.LoadAsync(artworkUrl); } catch { artwork.Image = null; } }
             }
         }
+
+        protected override void Dispose(bool disposing) { if (disposing) tips.Dispose(); base.Dispose(disposing); }
     }
 }
