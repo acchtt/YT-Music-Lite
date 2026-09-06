@@ -74,7 +74,7 @@ $Args = @(
     "/reference:$WinForms"
 ) + $Sources
 
-Write-Host "Building YT Music Lite 4.1.8 with C# 5 compatibility ..." -ForegroundColor Cyan
+Write-Host "Building YT Music Lite 4.1.9 with C# 5 compatibility ..." -ForegroundColor Cyan
 & $Csc $Args
 if ($LASTEXITCODE -ne 0) {
     throw "C# compilation failed with exit code $LASTEXITCODE"
