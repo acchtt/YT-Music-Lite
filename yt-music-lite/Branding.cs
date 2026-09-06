@@ -24,24 +24,23 @@ namespace YTMusicLite
             return path;
         }
 
-        // A single musical note whose flag is a play triangle. The same geometry
-        // powers the wordmark, artwork fallback, tray and executable icon.
+        // Three rounded sound bars: deliberately simple enough to read at 16 px.
         public static void DrawMark(Graphics graphics, RectangleF bounds)
         {
             GraphicsState state = graphics.Save();
-            graphics.TranslateTransform(bounds.X, bounds.Y);
-            graphics.ScaleTransform(bounds.Width / 64f, bounds.Height / 64f);
+            float size = Math.Min(bounds.Width, bounds.Height);
+            graphics.TranslateTransform(bounds.X + (bounds.Width - size) / 2, bounds.Y + (bounds.Height - size) / 2);
+            graphics.ScaleTransform(size / 64f, size / 64f);
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using (GraphicsPath tile = Rounded(new RectangleF(1, 1, 62, 62), 18))
-            using (LinearGradientBrush coral = new LinearGradientBrush(new Point(8, 0), new Point(55, 64), Color.FromArgb(255, 103, 117), Color.FromArgb(230, 37, 79)))
-                graphics.FillPath(coral, tile);
-            using (GraphicsPath note = new GraphicsPath())
+            using (GraphicsPath tile = Rounded(new RectangleF(1, 1, 62, 62), 17))
+            using (SolidBrush coral = new SolidBrush(Accent)) graphics.FillPath(coral, tile);
+            using (GraphicsPath left = Rounded(new RectangleF(15, 25, 8, 17), 4))
+            using (GraphicsPath middle = Rounded(new RectangleF(28, 16, 8, 32), 4))
+            using (GraphicsPath right = Rounded(new RectangleF(41, 22, 8, 21), 4))
             {
-                note.AddEllipse(16, 37, 22, 15);
-                note.AddRectangle(new RectangleF(31, 16, 7, 29));
-                note.AddPolygon(new PointF[] { new PointF(38, 16), new PointF(51, 25), new PointF(38, 34) });
-                note.FillMode = FillMode.Winding;
-                graphics.FillPath(Brushes.White, note);
+                graphics.FillPath(Brushes.White, left);
+                graphics.FillPath(Brushes.White, middle);
+                graphics.FillPath(Brushes.White, right);
             }
             graphics.Restore(state);
         }
@@ -86,17 +85,13 @@ namespace YTMusicLite
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            float size = Math.Min(Height - 4, MarkOnly ? Width - 4 : Width * 0.24f);
-            BrandArt.DrawMark(e.Graphics, new RectangleF(2, (Height - size) / 2, size, size));
+            float dpi = e.Graphics.DpiX / 96f;
+            float size = MarkOnly ? Math.Min(Width - 4, Height - 4) : Math.Min(28 * dpi, Height - 4);
+            BrandArt.DrawMark(e.Graphics, new RectangleF(0, (Height - size) / 2, size, size));
             if (MarkOnly) return;
-            float scale = Height / 38f;
-            using (Font name = new Font("Segoe UI", 10f * scale, FontStyle.Bold, GraphicsUnit.Pixel))
-            using (Font lite = new Font("Segoe UI", 9f * scale, FontStyle.Regular, GraphicsUnit.Pixel))
-            {
-                int left = (int)(size + 10);
-                TextRenderer.DrawText(e.Graphics, "YT MUSIC", name, new Rectangle(left, (int)(Height * 0.18f), Width - left, (int)(Height * 0.38f)), Color.FromArgb(242, 243, 248), TextFormatFlags.Left | TextFormatFlags.NoPadding);
-                TextRenderer.DrawText(e.Graphics, "L I T E", lite, new Rectangle(left, (int)(Height * 0.57f), Width - left, (int)(Height * 0.33f)), BrandArt.Muted, TextFormatFlags.Left | TextFormatFlags.NoPadding);
-            }
+            int left = (int)(size + 10 * dpi);
+            using (Font name = new Font("Segoe UI", 10.5f, FontStyle.Bold))
+                TextRenderer.DrawText(e.Graphics, "YT Music Lite", name, new Rectangle(left, 0, Width - left, Height), Color.FromArgb(235, 237, 243), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
         }
     }
 }
