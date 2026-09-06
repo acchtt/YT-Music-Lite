@@ -39,7 +39,7 @@ namespace YTMusicLite
             {
                 note.AddEllipse(16, 37, 22, 15);
                 note.AddRectangle(new RectangleF(31, 16, 7, 29));
-                note.AddPolygon(new PointF[] { new PointF(36, 15), new PointF(51, 25), new PointF(36, 35) });
+                note.AddPolygon(new PointF[] { new PointF(38, 16), new PointF(51, 25), new PointF(38, 34) });
                 note.FillMode = FillMode.Winding;
                 graphics.FillPath(Brushes.White, note);
             }

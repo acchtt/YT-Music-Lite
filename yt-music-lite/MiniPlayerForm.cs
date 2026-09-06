@@ -46,6 +46,7 @@ namespace YTMusicLite
             ForeColor = Color.FromArgb(245, 246, 251);
             Font = new Font("Segoe UI", 9f);
             DoubleBuffered = true;
+            Padding = new Padding(1);
             KeyPreview = true;
             KeyDown += delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Escape) { Hide(); e.Handled = true; } };
 
@@ -81,18 +82,22 @@ namespace YTMusicLite
             logo.MouseDown += DragWindow;
             tips.SetToolTip(playbackLabel, "Drag to move the mini player");
 
-            TableLayoutPanel track = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 4, 0, 0) };
+            TableLayoutPanel track = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 4, 0, 0) };
             track.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
             track.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            track.RowStyles.Add(new RowStyle(SizeType.Percent, 65));
-            track.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
+            track.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             artwork = new RoundedArtwork { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.FromArgb(33, 35, 44), Margin = new Padding(0, 0, 14, 0) };
             track.Controls.Add(artwork, 0, 0);
-            track.SetRowSpan(artwork, 2);
+
             title = new Label { Text = "Your next favorite", Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI", 13f, FontStyle.Bold), Margin = new Padding(0, 2, 0, 0) };
             artist = new Label { Text = "Choose a song to get started", Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = BrandArt.Muted, Font = new Font("Segoe UI", 9.5f), Margin = Padding.Empty };
-            track.Controls.Add(title, 1, 0);
-            track.Controls.Add(artist, 1, 1);
+            TableLayoutPanel metadata = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty };
+            metadata.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            metadata.RowStyles.Add(new RowStyle(SizeType.Percent, 65));
+            metadata.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
+            metadata.Controls.Add(title, 0, 0);
+            metadata.Controls.Add(artist, 0, 1);
+            track.Controls.Add(metadata, 1, 0);
             layout.Controls.Add(track, 0, 1);
 
             progress = new SeekBar { Dock = DockStyle.Fill, AccessibleName = "Playback position", Interactive = false, Margin = new Padding(0, 6, 0, 0) };

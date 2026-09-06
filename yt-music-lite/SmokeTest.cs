@@ -140,7 +140,12 @@ namespace YTMusicLiteSmoke
                     Assert(Field<ToolTip>(mini, "tips").GetToolTip(play) == "Pause", "Play state must update tooltip");
                     mini.Show();
                     Application.DoEvents();
+                    Label miniArtist = Field<Label>(mini, "artist");
+                    Assert(miniArtist.Visible && miniArtist.Height >= miniArtist.Font.Height, "Artist line must remain readable");
                     Capture(mini, "mini-player.png");
+                    mini.UpdatePlayer(new PlayerState { Title = "Night Drive", Artist = "Late night radio", Duration = 240, CurrentTime = 61, Volume = 0, Paused = true });
+                    Assert(Field<LiteButton>(mini, "mute").AccessibleName == "Unmute", "Mute state needs an accurate accessible action");
+                    Capture(mini, "mini-player-paused.png");
                     mini.Hide();
                     foreach (float scale in new float[] { 1f, 1.25f, 1.5f, 2f })
                     {
