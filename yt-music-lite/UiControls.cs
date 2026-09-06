@@ -585,6 +585,7 @@ namespace YTMusicLite
         private IconKind? drawnIcon;
         private bool pressed;
         private bool selected;
+        public bool ShowIconCaption { get; set; }
         public bool Selected { get { return selected; } set { selected = value; Invalidate(); } }
         public IconKind? DrawnIcon { get { return drawnIcon; } set { drawnIcon = value; Invalidate(); } }
         public IconButtonStyle IconStyle { get; set; }
@@ -603,7 +604,7 @@ namespace YTMusicLite
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             bool primary = IconStyle == IconButtonStyle.Light || IconStyle == IconButtonStyle.Accent;
             Color fill = primary ? (pressed ? Color.FromArgb(223, 53, 83) : hover ? Color.FromArgb(255, 103, 124) : BrandArt.Accent) : Selected ? Color.FromArgb(63, 33, 45) : Color.FromArgb(38, 40, 49);
-            if (primary || hover || Selected || pressed)
+            if (primary || hover || Selected || pressed || IconStyle == IconButtonStyle.Soft)
             {
                 using (SolidBrush brush = new SolidBrush(fill))
                 {
@@ -612,8 +613,11 @@ namespace YTMusicLite
                 }
             }
             Color foreground = !Enabled ? Color.FromArgb(87, 90, 102) : Selected ? BrandArt.Accent : Color.FromArgb(239, 240, 247);
-            int size = Math.Max(12, (int)(Math.Min(Width, Height) * (primary ? 0.44f : 0.53f)));
-            IconArt.Draw(e.Graphics, drawnIcon.Value, new Rectangle((Width - size) / 2, (Height - size) / 2, size, size), foreground, 1.8f);
+            int size = Math.Max(16, (int)(Math.Min(Width, Height) * (primary ? 0.44f : 0.66f)));
+            int iconX = ShowIconCaption ? (int)(10 * e.Graphics.DpiX / 96f) : (Width - size) / 2;
+            IconArt.Draw(e.Graphics, drawnIcon.Value, new Rectangle(iconX, (Height - size) / 2, size, size), foreground, 1.8f);
+            if (ShowIconCaption)
+                TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle(iconX + size + 7, 0, Width - iconX - size - 12, Height), foreground, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
             if (Focused && ShowFocusCues)
                 using (Pen focus = new Pen(Color.FromArgb(230, 233, 246), 1.5f))
                 using (GraphicsPath path = BrandArt.Rounded(new RectangleF(1, 1, Width - 3, Height - 3), primary ? Width / 2 : 9)) e.Graphics.DrawPath(focus, path);
