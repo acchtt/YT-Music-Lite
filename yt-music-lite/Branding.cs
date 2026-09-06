@@ -26,6 +26,7 @@ namespace YTMusicLite
         {
             base.OnPaint(e);
             Graphics g = e.Graphics;
+            g.ScaleTransform(Width / 150f, Height / 38f);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 

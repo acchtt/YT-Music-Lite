@@ -1,0 +1,47 @@
+name: Windows desktop UI checks
+
+on:
+  push:
+    branches: [improve/desktop-ux]
+  pull_request:
+    paths:
+      - 'yt-music-lite/**'
+      - '.github/workflows/desktop-ux-check.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-ui:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native application
+        shell: pwsh
+        run: .\yt-music-lite\build.ps1
+      - name: Compile and run UI regression checks
+        shell: pwsh
+        run: |
+          $Root = Resolve-Path .\yt-music-lite
+          $Build = Join-Path $Root 'build'
+          $Csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $Csc /nologo /target:exe /platform:x64 /langversion:5 /out:"$Build\YTMusicLite.SmokeTest.exe" /reference:System.dll /reference:System.Core.dll /reference:Accessibility.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:"$Build\YTMusicLite.exe" (Join-Path $Root 'SmokeTest.cs')
+          if ($LASTEXITCODE -ne 0) { throw 'UI test compilation failed' }
+          Push-Location $Build
+          try {
+            .\YTMusicLite.SmokeTest.exe
+            if ($LASTEXITCODE -ne 0) { throw 'UI regression checks failed' }
+          } finally { Pop-Location }
+      - name: Upload UI captures and test build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop-ui-check
+          path: |
+            yt-music-lite/build/*.png
+            yt-music-lite/build/*.exe
+            yt-music-lite/build/*.dll

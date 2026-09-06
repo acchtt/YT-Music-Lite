@@ -1,77 +1,30 @@
-# YTM Desktop — Option 3
+# YT Music Lite
 
-Windows standalone YouTube Music client using Tauri + React + TypeScript with a Rust service layer. The visible application is custom UI; YouTube Music's website is not used as the normal player UI.
+A lightweight Windows app for YouTube Music, built with C# WinForms and Microsoft WebView2. YouTube Music provides the library, search and official player; the desktop shell adds a mini player, tray controls, sleep mode and verified updates.
 
-## Current build: 0.2.6
+## Build and run
 
-### Account
-
-Settings now provides **Sign in with Google**. A temporary YouTube Music WebView is used only to establish the account session, then the session is stored locally for the Rust API client. `browser.json` remains available only as an Advanced fallback.
-
-### Built-in updates
-
-0.2.6 removes the old repository/public-key fields from Settings. The update channel is built into the app:
-
-`acchtt/YTM-Desktop` → GitHub Releases → Windows NSIS installer.
-
-Settings > App updates can:
-
-- check for a newer stable release;
-- show its release notes;
-- download the Windows installer;
-- show download progress;
-- verify the release SHA-256;
-- close YTM Desktop and install silently;
-- relaunch an installed build after a successful update.
-
-There is no updater key or URL for the user to paste into the app.
-
-The release repository itself must exist once. From the project root run:
+On Windows with .NET Framework 4.8 and PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-update-repo.ps1
+.\yt-music-lite\build.ps1 -Run
 ```
 
-Then publish the baseline release:
+The build script downloads its WebView2 SDK dependency. If the app reports a missing WebView2 runtime, run `yt-music-lite/install-webview2-runtime.cmd`.
 
-```powershell
-git tag app-v0.2.6
-git push origin app-v0.2.6
-```
+## Desktop controls
 
-Future releases are one command:
+- Use Back/Forward to navigate; unavailable navigation actions are disabled.
+- Open the mini player from the toolbar or tray. Its last position and **Always on top** preference are remembered.
+- Tab through native controls. Use Space/Enter for buttons, Space for switches, and arrow keys for sliders. Seeking moves five seconds at a time; Home/End jump to the beginning/end.
+- **Pause and sleep** pauses music and reduces resource use. **Resume** returns to the player; playback stays paused until you press Play.
+- Closing/minimizing can keep the app in the tray. Use the tray menu's **Exit** to quit, or change this behavior in Settings.
+- **Settings → About & updates** shows release notes, download progress and verification status. Download while listening, then choose **Restart to update** when ready.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\publish-update.ps1 -Version 0.2.7
-```
+## Source and verification
 
-See `docs/UPDATES.md`.
+The current Windows app lives in `yt-music-lite/`. `src/` and `src-tauri/` contain the earlier React/Tauri implementation and are not used by the current native release workflow.
 
-## Development
+`.github/workflows/desktop-ux-check.yml` builds the Windows app and runs UI regression checks, including scaled Settings captures. Those captures exercise layout scaling; real multi-monitor DPI changes and screen-reader behavior still need manual Windows checks.
 
-```powershell
-npm install
-npm run tauri:dev
-```
-
-## Windows release build
-
-```powershell
-npm run tauri:build -- --bundles nsis
-```
-
-## Project layout
-
-```text
-src/                 React UI
-src-tauri/           Rust/Tauri backend
-  src/music_service.rs
-  src/playback_resolver.rs
-  src/update_service.rs
-scripts/             Windows setup/release helpers
-.github/workflows/   Windows GitHub Release pipeline
-```
-
-## Security notes
-
-Account session files and `browser.json` are ignored by Git. The built-in updater accepts installers only from the hard-coded YTM Desktop GitHub release channel and verifies the release SHA-256 before launching the installer. Windows code signing can be added later as a second publisher-identity layer.
+Releases use the `ytmlite-v*` channel in this repository. The updater verifies SHA-256 before preparing an update and again before installation.

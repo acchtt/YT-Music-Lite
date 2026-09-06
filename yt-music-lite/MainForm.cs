@@ -16,7 +16,7 @@ namespace YTMusicLite
         private readonly Panel topBar;
         private readonly Panel playerBar;
         private readonly Label status;
-        private readonly Label updateBadge;
+        private readonly LiteButton updateBadge;
         private readonly PictureBox artwork;
         private readonly Label nowTitle;
         private readonly Label nowArtist;
@@ -32,6 +32,33 @@ namespace YTMusicLite
         private readonly string settingsPath;
         private readonly ToolStripMenuItem minimizeToTrayItem;
         private readonly ToolTip tips;
+
+        private readonly Panel statePanel;
+        private readonly Label stateTitle;
+        private readonly Label stateDescription;
+        private readonly LiteButton stateAction;
+        private readonly LiteButton backButton;
+        private readonly LiteButton forwardButton;
+        private Action recoveryAction;
+        private bool initializing;
+        private bool refreshing;
+        private bool suspending;
+        private int wakeGeneration;
+        private bool trayExplained;
+        private bool miniAlwaysOnTop = true;
+        private Point? miniLocation;
+        private SettingsForm settingsWindow;
+        private bool updateDownloading;
+        private PreparedUpdate preparedUpdate;
+        public event EventHandler UpdateChanged;
+        public string UpdateMessage { get; private set; }
+        public string UpdateNotes { get; private set; }
+        public int UpdateProgress { get; private set; }
+        public bool UpdateBusy { get { return updateCheckRunning || updateDownloading; } }
+        public bool UpdateAvailable { get { return pendingUpdate != null; } }
+        public bool UpdateReady { get { return preparedUpdate != null; } }
+        public bool MiniAlwaysOnTop { get { return miniAlwaysOnTop; } }
+        public Point? MiniLocation { get { return miniLocation; } }
 
         private PlayerState lastState;
         private UpdateCheckResult pendingUpdate;
@@ -52,6 +79,8 @@ namespace YTMusicLite
 
         public MainForm()
         {
+            AutoScaleDimensions = new SizeF(6f, 13f);
+            AutoScaleMode = AutoScaleMode.Font;
             Text = "YT Music Lite";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(900, 620);
@@ -72,6 +101,8 @@ namespace YTMusicLite
                 "YTMusicLite",
                 "settings.ini");
             LoadSettings();
+            UpdateMessage = "Check for a newer version when you are ready.";
+            UpdateNotes = "";
 
             topBar = new Panel();
             topBar.Dock = DockStyle.Top;
@@ -95,20 +126,21 @@ namespace YTMusicLite
             topBar.Controls.Add(brand);
 
             int navX = 165;
-            LiteButton back = MakeTopButton("‹", navX, "Back");
+            LiteButton back = backButton = MakeTopButton("‹", navX, "Back");
             back.Click += delegate { if (initialized && web.CanGoBack) web.GoBack(); };
             navX += 38;
-            LiteButton forward = MakeTopButton("›", navX, "Forward");
+            LiteButton forward = forwardButton = MakeTopButton("›", navX, "Forward");
             forward.Click += delegate { if (initialized && web.CanGoForward) web.GoForward(); };
+            back.Enabled = forward.Enabled = false;
             navX += 38;
             LiteButton reload = MakeTopButton("↻", navX, "Reload");
-            reload.Click += delegate { if (initialized) web.Reload(); };
+            reload.Click += delegate { if (initialized) { WakeWebView(); web.Reload(); } };
             navX += 38;
             LiteButton home = MakeTopButton("⌂", navX, "YouTube Music home");
             home.Click += delegate { NavigateHome(); };
 
             status = new Label();
-            status.Text = "Starting…";
+            status.Text = "";
             status.ForeColor = Color.FromArgb(125, 125, 125);
             status.Location = new Point(navX + 46, 18);
             status.Size = new Size(220, 20);
@@ -125,8 +157,9 @@ namespace YTMusicLite
             miniButton.Location = new Point(ClientSize.Width - 90, 9);
             miniButton.Click += delegate { ShowMiniPlayer(); };
 
-            updateBadge = new Label();
-            updateBadge.Text = "UPDATE";
+            updateBadge = new LiteButton();
+            updateBadge.AccessibleName = "App updates";
+            updateBadge.Text = "Update";
             updateBadge.Visible = false;
             updateBadge.AutoSize = false;
             updateBadge.Size = new Size(66, 24);
@@ -137,9 +170,37 @@ namespace YTMusicLite
             updateBadge.Cursor = Cursors.Hand;
             updateBadge.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             updateBadge.Location = new Point(ClientSize.Width - 164, 15);
-            updateBadge.Click += delegate { CheckForUpdatesInteractive(); };
+            updateBadge.Click += delegate { ShowSettings(true); };
             tips.SetToolTip(updateBadge, "A new YT Music Lite version is available");
             topBar.Controls.Add(updateBadge);
+
+            TableLayoutPanel toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, RowCount = 1, Padding = new Padding(8, 4, 8, 4) };
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            brandMark.Visible = brand.Visible = false;
+            BrandLogoControl logo = new BrandLogoControl { Dock = DockStyle.Fill, Cursor = Cursors.Default };
+            toolbar.Controls.Add(logo, 0, 0);
+            FlowLayoutPanel navigation = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Anchor = AnchorStyles.Left, Margin = Padding.Empty };
+            foreach (LiteButton button in new LiteButton[] { back, forward, reload, home })
+            {
+                button.Margin = new Padding(0, 0, 4, 0);
+                navigation.Controls.Add(button);
+            }
+            toolbar.Controls.Add(navigation, 1, 0);
+            status.Dock = DockStyle.Fill;
+            status.TextAlign = ContentAlignment.MiddleLeft;
+            toolbar.Controls.Add(status, 2, 0);
+            updateBadge.Anchor = miniButton.Anchor = settingsButton.Anchor = AnchorStyles.None;
+            toolbar.Controls.Add(updateBadge, 3, 0);
+            toolbar.Controls.Add(miniButton, 4, 0);
+            toolbar.Controls.Add(settingsButton, 5, 0);
+            topBar.Controls.Add(toolbar);
 
             web = new WebView2();
             web.Dock = DockStyle.Fill;
@@ -150,6 +211,24 @@ namespace YTMusicLite
             webHost.BackColor = Color.Black;
             webHost.Padding = new Padding(0, 1, 0, 0);
             webHost.Controls.Add(web);
+
+            statePanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(18, 18, 18), Padding = new Padding(36), Visible = false };
+            TableLayoutPanel stateLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5 };
+            stateLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            stateLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            stateLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            stateLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            stateLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            stateLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            stateTitle = new Label { Text = "Opening YouTube Music", AutoSize = true, Anchor = AnchorStyles.None, Font = new Font("Segoe UI", 18f, FontStyle.Bold), Margin = new Padding(0, 0, 0, 12) };
+            stateDescription = new Label { AutoSize = true, Anchor = AnchorStyles.None, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.FromArgb(175, 175, 175), MaximumSize = new Size(560, 0), Margin = new Padding(0, 0, 0, 20) };
+            stateAction = new LiteButton { Text = "Retry", AutoSize = true, Anchor = AnchorStyles.None, Padding = new Padding(18, 8, 18, 8) };
+            stateAction.Click += delegate { if (recoveryAction != null) recoveryAction(); };
+            stateLayout.Controls.Add(stateTitle, 0, 1);
+            stateLayout.Controls.Add(stateDescription, 0, 2);
+            stateLayout.Controls.Add(stateAction, 0, 3);
+            statePanel.Controls.Add(stateLayout);
+            webHost.Controls.Add(statePanel);
 
             playerBar = new Panel();
             playerBar.Dock = DockStyle.Bottom;
@@ -255,7 +334,7 @@ namespace YTMusicLite
             menu.Items.Add("Show YT Music Lite", null, delegate { RestoreMainWindow(); });
             menu.Items.Add("Mini player", null, delegate { ShowMiniPlayer(); });
             menu.Items.Add("Play / Pause", null, delegate { TogglePlayback(); });
-            menu.Items.Add("Sleep", null, delegate { SleepNow(); });
+            menu.Items.Add("Pause and sleep", null, delegate { SleepNow(); });
             menu.Items.Add(new ToolStripSeparator());
             minimizeToTrayItem = new ToolStripMenuItem("Minimize to tray");
             minimizeToTrayItem.CheckOnClick = true;
@@ -276,15 +355,13 @@ namespace YTMusicLite
             playerBar.Resize += delegate { LayoutPlayerControls(); };
             Resize += async delegate
             {
-                LayoutTopControls(settingsButton, miniButton);
                 await HandleWindowStateAsync();
             };
             Load += async delegate
             {
                 LayoutPlayerControls();
-                LayoutTopControls(settingsButton, miniButton);
                 await InitializeWebViewAsync();
-                if (automaticUpdateChecks) CheckForUpdates(false);
+                if (automaticUpdateChecks) CheckForUpdatesInteractive();
             };
             FormClosing += MainFormClosing;
         }
@@ -297,6 +374,7 @@ namespace YTMusicLite
             button.Location = new Point(x, 9);
             button.Size = new Size(34, 34);
             topBar.Controls.Add(button);
+            button.AccessibleName = tip;
             tips.SetToolTip(button, tip);
             return button;
         }
@@ -307,16 +385,9 @@ namespace YTMusicLite
             button.Text = text;
             button.Font = new Font("Segoe UI Symbol", 12f, FontStyle.Regular);
             button.Size = new Size(40, 38);
+            button.AccessibleName = tip;
             tips.SetToolTip(button, tip);
             return button;
-        }
-
-        private void LayoutTopControls(Control settingsButton, Control miniButton)
-        {
-            if (settingsButton == null || miniButton == null) return;
-            settingsButton.Location = new Point(Math.Max(0, topBar.ClientSize.Width - 48), 9);
-            miniButton.Location = new Point(Math.Max(0, topBar.ClientSize.Width - 90), 9);
-            updateBadge.Location = new Point(Math.Max(0, topBar.ClientSize.Width - 164), 15);
         }
 
         private void LayoutPlayerControls()
@@ -351,10 +422,13 @@ namespace YTMusicLite
             minimizeToTray = true;
             closeToTray = true;
             automaticUpdateChecks = true;
+            miniAlwaysOnTop = true;
             try
             {
                 if (!File.Exists(settingsPath)) return;
                 string[] lines = File.ReadAllLines(settingsPath);
+                int? miniX = null;
+                int? miniY = null;
                 foreach (string raw in lines)
                 {
                     string line = raw.Trim();
@@ -366,7 +440,12 @@ namespace YTMusicLite
                     if (key == "minimize_to_tray") minimizeToTray = enabled;
                     else if (key == "close_to_tray") closeToTray = enabled;
                     else if (key == "automatic_update_checks") automaticUpdateChecks = enabled;
+                    else if (key == "tray_explained") trayExplained = enabled;
+                    else if (key == "mini_always_on_top") miniAlwaysOnTop = enabled;
+                    else if (key == "mini_x") { int x; if (int.TryParse(value, out x)) miniX = x; }
+                    else if (key == "mini_y") { int y; if (int.TryParse(value, out y)) miniY = y; }
                 }
+                if (miniX.HasValue && miniY.HasValue) miniLocation = new Point(miniX.Value, miniY.Value);
             }
             catch
             {
@@ -382,7 +461,10 @@ namespace YTMusicLite
                 string content =
                     "minimize_to_tray=" + (minimizeToTray ? "1" : "0") + Environment.NewLine +
                     "close_to_tray=" + (closeToTray ? "1" : "0") + Environment.NewLine +
-                    "automatic_update_checks=" + (automaticUpdateChecks ? "1" : "0") + Environment.NewLine;
+                    "automatic_update_checks=" + (automaticUpdateChecks ? "1" : "0") + Environment.NewLine +
+                    "tray_explained=" + (trayExplained ? "1" : "0") + Environment.NewLine +
+                    "mini_always_on_top=" + (miniAlwaysOnTop ? "1" : "0") + Environment.NewLine;
+                if (miniLocation.HasValue) content += "mini_x=" + miniLocation.Value.X + Environment.NewLine + "mini_y=" + miniLocation.Value.Y + Environment.NewLine;
                 File.WriteAllText(settingsPath, content);
             }
             catch
@@ -409,8 +491,41 @@ namespace YTMusicLite
             SaveSettings();
         }
 
+        public void SetMiniAlwaysOnTop(bool value)
+        {
+            miniAlwaysOnTop = value;
+            miniPlayer.TopMost = value;
+            SaveSettings();
+        }
+
+        public void RememberMiniLocation(Point location) { miniLocation = location; SaveSettings(); }
+
+        private void ShowState(string title, string description, string action, Action recover)
+        {
+            stateTitle.Text = title;
+            stateDescription.Text = description;
+            stateAction.Text = action ?? "";
+            stateAction.AccessibleName = action;
+            stateAction.Visible = recover != null;
+            recoveryAction = recover;
+            statePanel.Visible = true;
+            statePanel.BringToFront();
+            if (recover != null && Visible) stateAction.Focus();
+        }
+
+        private void HideState() { statePanel.Visible = false; recoveryAction = null; }
+
+        private void UpdateNavigation()
+        {
+            backButton.Enabled = initialized && web.CanGoBack;
+            forwardButton.Enabled = initialized && web.CanGoForward;
+        }
+
         private async Task InitializeWebViewAsync()
         {
+            if (initializing || initialized) return;
+            initializing = true;
+            ShowState("Opening YouTube Music", "Getting your music ready…", null, null);
             try
             {
                 string profile = Path.Combine(
@@ -434,11 +549,19 @@ namespace YTMusicLite
                     e.Handled = true;
                     web.CoreWebView2.Navigate(e.Uri);
                 };
-                web.CoreWebView2.NavigationStarting += delegate { status.Text = "Loading…"; };
+                web.CoreWebView2.HistoryChanged += delegate { UpdateNavigation(); };
+                web.CoreWebView2.NavigationStarting += delegate
+                {
+                    status.Text = "Loading…";
+                    HideState();
+                };
                 web.CoreWebView2.NavigationCompleted += async delegate(object sender, CoreWebView2NavigationCompletedEventArgs e)
                 {
-                    status.Text = e.IsSuccess ? "Ready" : "Navigation error";
-                    if (e.IsSuccess) await InjectLiteModeAsync();
+                    status.Text = "";
+                    UpdateNavigation();
+                    if (e.IsSuccess) { HideState(); await InjectLiteModeAsync(); }
+                    else if (e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
+                        ShowState("Couldn’t load your music", "Check your connection, then try again.", "Retry", delegate { WakeWebView(); web.Reload(); });
                 };
 
                 initialized = true;
@@ -447,14 +570,10 @@ namespace YTMusicLite
             }
             catch (Exception ex)
             {
-                status.Text = "WebView2 failed";
-                MessageBox.Show(
-                    "YT Music Lite could not start WebView2.\r\n\r\n" + ex.Message +
-                    "\r\n\r\nRun install-webview2-runtime.cmd, then launch again.",
-                    "YT Music Lite",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                ShowState("Couldn’t open YouTube Music", "Try again. If this keeps happening, run the included install-webview2-runtime.cmd and reopen the app.", "Retry", async delegate { await InitializeWebViewAsync(); });
+                tips.SetToolTip(stateDescription, ex.Message);
             }
+            finally { initializing = false; }
         }
 
         private void NavigateHome()
@@ -491,7 +610,8 @@ namespace YTMusicLite
 
         private async Task RefreshPlayerStateAsync()
         {
-            if (!initialized || autoSuspended || manualSleep || web.CoreWebView2 == null) return;
+            if (!initialized || autoSuspended || manualSleep || refreshing || web.CoreWebView2 == null) return;
+            refreshing = true;
             string script = @"(() => {
                 const media = document.querySelector('video, audio');
                 const titleNode = document.querySelector('ytmusic-player-bar .title, ytmusic-player-bar yt-formatted-string.title');
@@ -526,17 +646,19 @@ namespace YTMusicLite
                 lastState = state;
                 UpdateNowPlaying(state);
                 miniPlayer.UpdatePlayer(state);
-                status.Text = state.Paused ? "Paused" : "Playing";
+                // Playback state belongs to the player, never the app notification area.
             }
             catch
             {
             }
+            finally { refreshing = false; }
         }
 
         private void UpdateNowPlaying(PlayerState state)
         {
             nowTitle.Text = string.IsNullOrWhiteSpace(state.Title) ? "Nothing playing" : state.Title;
             nowArtist.Text = string.IsNullOrWhiteSpace(state.Artist) ? "YouTube Music" : state.Artist;
+            playPauseButton.AccessibleName = state.Paused ? "Play" : "Pause";
             playPauseButton.Text = state.Paused ? "▶" : "❚❚";
             progress.Ratio = state.Duration > 0 ? state.CurrentTime / state.Duration : 0;
             progress.Interactive = state.Duration > 0;
@@ -620,11 +742,26 @@ namespace YTMusicLite
             Activate();
         }
 
-        private void ShowSettings()
+        private void ShowSettings() { ShowSettings(false); }
+        private void ShowSettings(bool updates)
         {
-            using (SettingsForm settings = new SettingsForm(this))
+            if (settingsWindow == null || settingsWindow.IsDisposed)
             {
-                settings.ShowDialog(this);
+                settingsWindow = new SettingsForm(this);
+                settingsWindow.Show(this);
+            }
+            if (updates) settingsWindow.ShowUpdates();
+            settingsWindow.Activate();
+        }
+
+        private void HideToTray()
+        {
+            Hide();
+            if (!trayExplained)
+            {
+                trayExplained = true;
+                SaveSettings();
+                tray.ShowBalloonTip(6000, "Music stays with you", "YT Music Lite is still running. Double-click its tray icon to reopen; right-click and choose Exit to quit.", ToolTipIcon.Info);
             }
         }
 
@@ -633,55 +770,74 @@ namespace YTMusicLite
             if (!initialized) return;
             if (WindowState == FormWindowState.Minimized && minimizeToTray)
             {
-                Hide();
+                HideToTray();
                 if (lastState.Paused) await SuspendWebViewAsync(false);
             }
-            else if (WindowState != FormWindowState.Minimized)
-            {
+            else if (WindowState != FormWindowState.Minimized && autoSuspended && !manualSleep)
                 WakeWebView();
-            }
         }
 
         public async void SleepNow()
         {
-            if (!initialized) return;
+            if (!initialized || suspending) return;
             await ExecutePlayerScriptAsync(@"(() => { const m = document.querySelector('video, audio'); if (m) m.pause(); })();");
             await SuspendWebViewAsync(true);
-            status.Text = "Sleeping";
         }
 
         private async Task SuspendWebViewAsync(bool manual)
         {
-            if (!initialized || web.CoreWebView2 == null) return;
+            if (!initialized || suspending || web.CoreWebView2 == null) return;
+            suspending = true;
+            int generation = wakeGeneration;
             try
             {
                 web.Visible = false;
                 bool ok = await web.CoreWebView2.TrySuspendAsync();
+                if (generation != wakeGeneration)
+                {
+                    web.CoreWebView2.Resume();
+                    web.Visible = true;
+                    return;
+                }
                 if (ok)
                 {
                     manualSleep = manual;
                     autoSuspended = !manual;
+                    if (manual) ShowState("Taking a break", "Music paused to save resources.", "Resume", delegate { WakeWebView(); web.Focus(); });
                 }
-                else web.Visible = Visible;
+                else
+                {
+                    web.Visible = true;
+                    if (manual) ShowState("Music is paused", "The app couldn’t enter sleep mode. You can return to your music.", "Return to music", delegate { WakeWebView(); web.Focus(); });
+                }
             }
-            catch { web.Visible = Visible; }
+            catch
+            {
+                web.Visible = true;
+                if (manual) ShowState("Music is paused", "Sleep mode is unavailable right now.", "Return to music", delegate { WakeWebView(); web.Focus(); });
+            }
+            finally { suspending = false; }
         }
 
         private void WakeWebView()
         {
             if (!initialized) return;
+            wakeGeneration++;
+            if (web.CoreWebView2 != null) web.CoreWebView2.Resume();
             manualSleep = false;
             autoSuspended = false;
             web.Visible = true;
+            HideState();
+            status.Text = "";
         }
 
         private void MainFormClosing(object sender, FormClosingEventArgs e)
         {
             if (exiting) return;
-            if (closeToTray)
+            if (closeToTray && e.CloseReason == CloseReason.UserClosing)
             {
                 e.Cancel = true;
-                Hide();
+                HideToTray();
                 if (lastState.Paused) SuspendWebViewAsync(false);
                 return;
             }
@@ -691,80 +847,93 @@ namespace YTMusicLite
             miniPlayer.Close();
         }
 
-        public void CheckForUpdatesInteractive()
+        private void NotifyUpdateChanged()
         {
-            CheckForUpdates(true);
+            if (IsDisposed) return;
+            updateBadge.Visible = pendingUpdate != null;
+            updateBadge.Text = preparedUpdate == null ? "Update" : "Restart";
+            if (UpdateChanged != null) UpdateChanged(this, EventArgs.Empty);
         }
 
-        private async void CheckForUpdates(bool interactive)
+        public async void CheckForUpdatesInteractive()
         {
-            if (updateCheckRunning) return;
+            if (UpdateBusy || UpdateReady) return;
             updateCheckRunning = true;
-            string previousStatus = status.Text;
-            if (interactive) status.Text = "Checking updates…";
-
+            UpdateMessage = "Checking for updates…";
+            UpdateProgress = 0;
+            NotifyUpdateChanged();
             try
             {
                 UpdateCheckResult result = await updateService.CheckAsync();
-                if (result.UpdateAvailable)
-                {
-                    pendingUpdate = result;
-                    updateBadge.Visible = true;
-                    updateBadge.Text = "UPDATE";
-                    if (interactive)
-                    {
-                        DialogResult choice = MessageBox.Show(
-                            result.Message + "\r\n\r\nDownload, verify, install, and restart now?",
-                            "YT Music Lite Update",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Information);
-                        if (choice == DialogResult.Yes) await InstallUpdateAsync(result);
-                    }
-                    else status.Text = previousStatus;
-                }
-                else
-                {
-                    pendingUpdate = null;
-                    updateBadge.Visible = false;
-                    if (interactive)
-                    {
-                        MessageBox.Show(result.Message, "YT Music Lite Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        status.Text = "Up to date";
-                    }
-                    else status.Text = previousStatus;
-                }
-            }
-            catch (WebException ex)
-            {
-                status.Text = previousStatus;
-                if (interactive)
-                {
-                    string message = ex.Message;
-                    if (ex.Response is HttpWebResponse && ((HttpWebResponse)ex.Response).StatusCode == HttpStatusCode.NotFound)
-                        message = "The YT Music Lite release channel has not been published yet.";
-                    MessageBox.Show(message, "YT Music Lite Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
+                pendingUpdate = result.UpdateAvailable ? result : null;
+                UpdateMessage = result.Message;
+                UpdateNotes = result.ReleaseNotes ?? "";
             }
             catch (Exception ex)
             {
-                status.Text = previousStatus;
-                if (interactive) MessageBox.Show(ex.Message, "YT Music Lite Update", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                UpdateMessage = "Couldn’t check for updates. Check your connection and try again.";
+                UpdateNotes = ex.Message;
             }
-            finally
+            finally { updateCheckRunning = false; NotifyUpdateChanged(); }
+        }
+
+        public async void DownloadUpdate()
+        {
+            if (UpdateBusy || pendingUpdate == null || UpdateReady) return;
+            updateDownloading = true;
+            UpdateProgress = 0;
+            UpdateMessage = "Downloading update… You can keep listening.";
+            NotifyUpdateChanged();
+            try
             {
-                updateCheckRunning = false;
+                Progress<int> progress = new Progress<int>(delegate(int value)
+                {
+                    if (!updateDownloading || IsDisposed) return;
+                    UpdateProgress = value;
+                    UpdateMessage = value >= 100 ? "Verifying download…" : "Downloading update… " + value + "%";
+                    NotifyUpdateChanged();
+                });
+                preparedUpdate = await updateService.PrepareAsync(pendingUpdate, progress);
+                UpdateMessage = "Update ready. Restart when you are ready to stop playback.";
+            }
+            catch (Exception ex)
+            {
+                UpdateMessage = "Couldn’t prepare the update. Try downloading again.";
+                UpdateNotes = ex.Message;
+                UpdateProgress = 0;
+            }
+            finally { updateDownloading = false; NotifyUpdateChanged(); }
+        }
+
+        public void RestartForUpdate()
+        {
+            if (preparedUpdate == null || UpdateBusy) return;
+            try
+            {
+                updateService.InstallPrepared(preparedUpdate);
+                ExitApplication();
+            }
+            catch (Exception ex)
+            {
+                preparedUpdate = null;
+                UpdateMessage = "Couldn’t install the update. Try downloading again.";
+                UpdateNotes = ex.Message;
+                NotifyUpdateChanged();
             }
         }
 
-        private async Task InstallUpdateAsync(UpdateCheckResult result)
+        protected override void Dispose(bool disposing)
         {
-            status.Text = "Downloading update…";
-            await updateService.DownloadAndInstallAsync(result, this);
-            exiting = true;
-            tray.Visible = false;
-            miniPlayer.Close();
-            Close();
-            Application.Exit();
+            if (disposing)
+            {
+                exiting = true;
+                if (stateTimer != null) { stateTimer.Stop(); stateTimer.Dispose(); }
+                if (tray != null) tray.Dispose();
+                if (tips != null) tips.Dispose();
+                if (settingsWindow != null) settingsWindow.Dispose();
+                if (miniPlayer != null) miniPlayer.Dispose();
+            }
+            base.Dispose(disposing);
         }
 
         private void ExitApplication()

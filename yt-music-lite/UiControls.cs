@@ -57,8 +57,8 @@ namespace YTMusicLite
                 if (kind == IconKind.Back || kind == IconKind.Forward)
                 {
                     float dir = kind == IconKind.Back ? -1f : 1f;
-                    float tip = cx + dir * -5f;
-                    float tail = cx + dir * 5f;
+                    float tip = cx + dir * 5f;
+                    float tail = cx - dir * 5f;
                     g.DrawLine(pen, tail, cy - 6f, tip, cy);
                     g.DrawLine(pen, tip, cy, tail, cy + 6f);
                     return;
@@ -229,7 +229,7 @@ namespace YTMusicLite
         }
     }
 
-    public sealed class IconButton : Control
+    public sealed class IconButton : Button
     {
         private bool hovered;
         private bool pressed;
@@ -238,10 +238,13 @@ namespace YTMusicLite
 
         public IconButton()
         {
+            FlatStyle = FlatStyle.Flat;
+            FlatAppearance.BorderSize = 0;
+            AccessibleRole = AccessibleRole.PushButton;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             Size = new Size(34, 34);
             Cursor = Cursors.Hand;
-            TabStop = false;
+            TabStop = true;
             ForeColor = Color.FromArgb(222, 222, 222);
             icon = IconKind.Play;
             buttonStyle = IconButtonStyle.Ghost;
@@ -268,7 +271,7 @@ namespace YTMusicLite
         {
             base.OnPaint(e);
             Color background = Color.Transparent;
-            Color iconColor = ForeColor;
+            Color iconColor = Enabled ? ForeColor : Color.FromArgb(95, 95, 95);
             bool fill = false;
 
             if (buttonStyle == IconButtonStyle.Light)
@@ -313,7 +316,8 @@ namespace YTMusicLite
 
             int iconSize = Math.Max(16, Math.Min(20, Math.Min(Width, Height) - 12));
             Rectangle iconBounds = new Rectangle((Width - iconSize) / 2, (Height - iconSize) / 2, iconSize, iconSize);
-            IconArt.Draw(e.Graphics, icon, iconBounds, iconColor, 1.7f);
+            IconArt.Draw(e.Graphics, icon, iconBounds, Enabled ? iconColor : Color.FromArgb(95, 95, 95), 1.7f);
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -3, -3), ForeColor, BackColor);
         }
 
         private static GraphicsPath RoundedRect(Rectangle rect, int radius)
@@ -362,7 +366,7 @@ namespace YTMusicLite
         }
     }
 
-    public sealed class IconTextButton : Control
+    public sealed class IconTextButton : Button
     {
         private bool hovered;
         private bool pressed;
@@ -371,10 +375,13 @@ namespace YTMusicLite
 
         public IconTextButton()
         {
+            FlatStyle = FlatStyle.Flat;
+            FlatAppearance.BorderSize = 0;
+            AccessibleRole = AccessibleRole.PushButton;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             Size = new Size(110, 32);
             Cursor = Cursors.Hand;
-            TabStop = false;
+            TabStop = true;
             ForeColor = Color.FromArgb(232, 232, 232);
             Font = new Font("Segoe UI", 8.75f, FontStyle.Regular);
             icon = IconKind.Window;
@@ -394,7 +401,7 @@ namespace YTMusicLite
             base.OnPaint(e);
             Color bg = pressed ? Color.FromArgb(48, 48, 48) : hovered ? Color.FromArgb(40, 40, 40) : Color.FromArgb(28, 28, 28);
             Color iconColor = Color.FromArgb(180, 180, 180);
-            Color textColor = ForeColor;
+            Color textColor = Enabled ? ForeColor : Color.FromArgb(95, 95, 95);
             if (buttonStyle == IconButtonStyle.Accent)
             {
                 bg = pressed ? Color.FromArgb(205, 38, 57) : hovered ? Color.FromArgb(248, 58, 78) : Color.FromArgb(235, 47, 67);
@@ -410,6 +417,7 @@ namespace YTMusicLite
             Rectangle iconBounds = new Rectangle(10, (Height - 16) / 2, 16, 16);
             IconArt.Draw(e.Graphics, icon, iconBounds, iconColor, 1.45f);
             TextRenderer.DrawText(e.Graphics, Text, Font, new Rectangle(34, 0, Width - 42, Height), textColor, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -3, -3), ForeColor, BackColor);
         }
 
         private static GraphicsPath RoundedRect(Rectangle rect, int radius)
@@ -429,50 +437,138 @@ namespace YTMusicLite
     {
         private double ratio;
         private bool interactive = true;
-
+        private bool dragging;
+        private readonly ToolTip preview = new ToolTip();
         public event EventHandler SeekRequested;
+        public double Duration { get; set; }
+        public double KeyboardStep { get; set; }
+        public bool IsDragging { get { return dragging; } }
 
         public SeekBar()
         {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
-            UpdateStyles();
-            Height = 18;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor | ControlStyles.Selectable, true);
+            Height = 24;
             BackColor = Color.Transparent;
             Cursor = Cursors.Hand;
+            TabStop = true;
+            AccessibleRole = AccessibleRole.Slider;
+            KeyboardStep = 0.05;
         }
 
         public double Ratio
         {
             get { return ratio; }
-            set
-            {
-                double next = value;
-                if (next < 0) next = 0;
-                if (next > 1) next = 1;
-                if (Math.Abs(ratio - next) < 0.0001) return;
-                ratio = next;
-                Invalidate();
-            }
+            set { if (!dragging) SetRatio(value); }
+        }
+
+        private void SetRatio(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) value = 0;
+            ratio = Math.Max(0, Math.Min(1, value));
+            Invalidate();
+            if (IsHandleCreated) AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1);
         }
 
         public bool Interactive
         {
             get { return interactive; }
-            set { interactive = value; Cursor = value ? Cursors.Hand : Cursors.Default; }
+            set
+            {
+                interactive = value;
+                TabStop = value;
+                Cursor = value ? Cursors.Hand : Cursors.Default;
+                if (!value) { dragging = false; Capture = false; }
+                Invalidate();
+            }
         }
+
+        protected override bool IsInputKey(Keys keyData)
+        {
+            Keys key = keyData & Keys.KeyCode;
+            return key == Keys.Left || key == Keys.Right || key == Keys.Up || key == Keys.Down || key == Keys.Home || key == Keys.End || base.IsInputKey(keyData);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (!interactive || !Enabled) return;
+            double step = Duration > 0 ? 5 / Duration : KeyboardStep;
+            if (e.KeyCode == Keys.Left || e.KeyCode == Keys.Down) SetRatio(ratio - step);
+            else if (e.KeyCode == Keys.Right || e.KeyCode == Keys.Up) SetRatio(ratio + step);
+            else if (e.KeyCode == Keys.Home) SetRatio(0);
+            else if (e.KeyCode == Keys.End) SetRatio(1);
+            else return;
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            Commit();
+        }
+
+        private double RatioAt(int x) { return Math.Max(0, Math.Min(1, (x - 4) / (double)Math.Max(1, Width - 8))); }
+        private void Commit() { if (SeekRequested != null) SeekRequested(this, EventArgs.Empty); }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (!interactive || Width <= 1) return;
-            Ratio = e.X / (double)Math.Max(1, Width - 1);
-            if (SeekRequested != null) SeekRequested(this, EventArgs.Empty);
+            if (!interactive || !Enabled || e.Button != MouseButtons.Left) return;
+            Focus();
+            dragging = true;
+            Capture = true;
+            SetRatio(RatioAt(e.X));
         }
 
-        protected override void OnPaintBackground(PaintEventArgs pevent)
+        protected override void OnMouseMove(MouseEventArgs e)
         {
-            if (BackColor == Color.Transparent && Parent != null) { pevent.Graphics.Clear(Parent.BackColor); return; }
-            base.OnPaintBackground(pevent);
+            base.OnMouseMove(e);
+            if (!interactive) return;
+            double target = RatioAt(e.X);
+            if (dragging) SetRatio(target);
+            string value = Duration > 0 ? FormatTime(target * Duration) : Math.Round(target * 100) + "%";
+            preview.SetToolTip(this, value);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (!dragging || e.Button != MouseButtons.Left) return;
+            SetRatio(RatioAt(e.X));
+            dragging = false;
+            Capture = false;
+            Commit();
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            if (!Capture) { dragging = false; Invalidate(); }
+        }
+
+        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); Invalidate(); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
+        protected override void Dispose(bool disposing) { if (disposing) preview.Dispose(); base.Dispose(disposing); }
+
+        public static string FormatTime(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value) || value < 0) value = 0;
+            TimeSpan time = TimeSpan.FromSeconds(Math.Min(value, int.MaxValue));
+            return time.TotalHours >= 1 ? ((int)time.TotalHours) + ":" + time.Minutes.ToString("00") + ":" + time.Seconds.ToString("00") : ((int)time.TotalMinutes) + ":" + time.Seconds.ToString("00");
+        }
+
+        protected override AccessibleObject CreateAccessibilityInstance() { return new SliderAccessibleObject(this); }
+        private sealed class SliderAccessibleObject : ControlAccessibleObject
+        {
+            private readonly SeekBar slider;
+            public SliderAccessibleObject(SeekBar owner) : base(owner) { slider = owner; }
+            public override string Value
+            {
+                get { return slider.Duration > 0 ? FormatTime(slider.Ratio * slider.Duration) + " of " + FormatTime(slider.Duration) : Math.Round(slider.Ratio * 100) + "%"; }
+                set { }
+            }
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            if (Parent != null) e.Graphics.Clear(Parent.BackColor);
+            else base.OnPaintBackground(e);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -481,82 +577,70 @@ namespace YTMusicLite
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             int y = Height / 2;
-            int left = 3;
-            int right = Math.Max(left, Width - 3);
-            int fill = left + (int)Math.Round((right - left) * ratio);
-            using (Pen backgroundPen = new Pen(Color.FromArgb(67, 67, 67), 3f))
-            using (Pen fillPen = new Pen(Color.FromArgb(238, 47, 67), 3f))
-            using (SolidBrush knob = new SolidBrush(Color.White))
+            int right = Math.Max(4, Width - 4);
+            int fill = 4 + (int)Math.Round((right - 4) * ratio);
+            using (Pen background = new Pen(Color.FromArgb(67, 67, 67), 3f))
+            using (Pen foreground = new Pen(interactive && Enabled ? Color.FromArgb(238, 47, 67) : Color.FromArgb(100, 100, 100), 3f))
             {
-                backgroundPen.StartCap = LineCap.Round;
-                backgroundPen.EndCap = LineCap.Round;
-                fillPen.StartCap = LineCap.Round;
-                fillPen.EndCap = LineCap.Round;
-                g.DrawLine(backgroundPen, left, y, right, y);
-                if (fill > left) g.DrawLine(fillPen, left, y, fill, y);
-                g.FillEllipse(knob, fill - 4, y - 4, 8, 8);
+                g.DrawLine(background, 4, y, right, y);
+                if (fill > 4) g.DrawLine(foreground, 4, y, fill, y);
+                if (interactive) g.FillEllipse(Brushes.White, fill - 4, y - 4, 8, 8);
             }
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(ClientRectangle, -1, -1), ForeColor, Parent == null ? Color.Black : Parent.BackColor);
         }
     }
 
-    public sealed class ToggleSwitch : Control
+    public sealed class ToggleSwitch : CheckBox
     {
-        private bool isChecked;
-        public event EventHandler CheckedChanged;
-
         public ToggleSwitch()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            Size = new Size(40, 22);
+            Size = new Size(46, 28);
+            AutoSize = false;
             Cursor = Cursors.Hand;
-            TabStop = false;
+            TabStop = true;
+            AccessibleRole = AccessibleRole.CheckButton;
         }
 
-        public bool Checked
-        {
-            get { return isChecked; }
-            set
-            {
-                if (isChecked == value) return;
-                isChecked = value;
-                Invalidate();
-                if (CheckedChanged != null) CheckedChanged(this, EventArgs.Empty);
-            }
-        }
-
-        protected override void OnMouseUp(MouseEventArgs e)
-        {
-            base.OnMouseUp(e);
-            if (e.Button == MouseButtons.Left) Checked = !Checked;
-        }
-
+        protected override void OnCheckedChanged(EventArgs e) { base.OnCheckedChanged(e); Invalidate(); }
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e);
             Graphics g = e.Graphics;
+            g.Clear(BackColor);
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            Rectangle track = new Rectangle(0, 2, Width - 1, Height - 5);
-            int radius = track.Height;
-            using (GraphicsPath path = RoundedRect(track, radius))
-            using (SolidBrush trackBrush = new SolidBrush(Checked ? Color.FromArgb(238, 47, 67) : Color.FromArgb(66, 66, 66))) g.FillPath(trackBrush, path);
-            int knobSize = track.Height - 4;
-            int knobX = Checked ? track.Right - knobSize - 2 : track.Left + 2;
-            using (SolidBrush knobBrush = new SolidBrush(Color.White)) g.FillEllipse(knobBrush, knobX, track.Top + 2, knobSize, knobSize);
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle rect, int radius)
-        {
-            int diameter = Math.Max(2, radius);
-            GraphicsPath path = new GraphicsPath();
-            path.AddArc(rect.Left, rect.Top, diameter, diameter, 90, 180);
-            path.AddArc(rect.Right - diameter, rect.Top, diameter, diameter, 270, 180);
-            path.CloseFigure();
-            return path;
+            Rectangle track = new Rectangle(3, 5, Width - 7, Height - 11);
+            int diameter = track.Height;
+            using (GraphicsPath path = new GraphicsPath())
+            {
+                path.AddArc(track.Left, track.Top, diameter, diameter, 90, 180);
+                path.AddArc(track.Right - diameter, track.Top, diameter, diameter, 270, 180);
+                path.CloseFigure();
+                using (SolidBrush brush = new SolidBrush(Enabled && Checked ? Color.FromArgb(238, 47, 67) : Color.FromArgb(80, 80, 80))) g.FillPath(brush, path);
+            }
+            int knob = track.Height - 4;
+            int x = Checked ? track.Right - knob - 2 : track.Left + 2;
+            g.FillEllipse(Brushes.White, x, track.Top + 2, knob, knob);
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(ClientRectangle, -1, -1), ForeColor, BackColor);
         }
     }
 
     public sealed class LiteButton : Button
     {
+        private IconKind? drawnIcon;
+        public IconKind? DrawnIcon { get { return drawnIcon; } set { drawnIcon = value; Invalidate(); } }
+        public IconButtonStyle IconStyle { get; set; }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            if (!drawnIcon.HasValue) { base.OnPaint(e); return; }
+            bool hover = ClientRectangle.Contains(PointToClient(Cursor.Position));
+            Color background = IconStyle == IconButtonStyle.Light ? Color.FromArgb(245, 245, 245) : hover && Enabled ? Color.FromArgb(40, 40, 40) : Parent.BackColor;
+            e.Graphics.Clear(background);
+            Color foreground = !Enabled ? Color.FromArgb(95, 95, 95) : IconStyle == IconButtonStyle.Light ? Color.FromArgb(18, 18, 18) : Color.FromArgb(220, 220, 220);
+            int size = Math.Min(20, Math.Min(Width, Height) - 10);
+            IconArt.Draw(e.Graphics, drawnIcon.Value, new Rectangle((Width - size) / 2, (Height - size) / 2, size, size), foreground, 1.7f);
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -3, -3), foreground, background);
+        }
         public LiteButton()
         {
             FlatStyle = FlatStyle.Flat;
@@ -566,7 +650,7 @@ namespace YTMusicLite
             BackColor = Color.FromArgb(31, 31, 31);
             ForeColor = Color.White;
             Font = new Font("Segoe UI", 10f, FontStyle.Regular);
-            TabStop = false;
+            TabStop = true;
             Cursor = Cursors.Hand;
         }
     }

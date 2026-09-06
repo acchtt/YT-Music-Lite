@@ -76,6 +76,7 @@ namespace YTMusicLite
                     result.Sha256 = sha256;
                     result.ChecksumUrl = checksumUrl;
                     result.ReleasePageUrl = release.GetString("html_url");
+                    result.ReleaseNotes = release.GetString("body");
                     result.Message = "YT Music Lite " + latest.ToString() + " is available.";
                     return result;
                 }
@@ -86,7 +87,7 @@ namespace YTMusicLite
             return UpdateCheckResult.NoUpdate("No YT Music Lite releases were found yet.");
         }
 
-        public async Task DownloadAndInstallAsync(UpdateCheckResult update, Form owner)
+        public async Task<PreparedUpdate> PrepareAsync(UpdateCheckResult update, IProgress<int> progress)
         {
             if (update == null || !update.UpdateAvailable || string.IsNullOrEmpty(update.DownloadUrl))
             {
@@ -97,7 +98,7 @@ namespace YTMusicLite
             Directory.CreateDirectory(tempRoot);
             string zipPath = Path.Combine(tempRoot, "YTMusicLite-" + update.Version + ".zip");
 
-            await DownloadFileAsync(update.DownloadUrl, zipPath);
+            await DownloadFileAsync(update.DownloadUrl, zipPath, progress);
 
             string expectedSha256 = update.Sha256;
             if (string.IsNullOrEmpty(expectedSha256) && !string.IsNullOrEmpty(update.ChecksumUrl))
@@ -118,6 +119,15 @@ namespace YTMusicLite
                 throw new InvalidDataException("The downloaded update failed SHA-256 verification.");
             }
 
+            return new PreparedUpdate { ZipPath = zipPath, Sha256 = actual };
+        }
+
+        public void InstallPrepared(PreparedUpdate update)
+        {
+            if (update == null || !File.Exists(update.ZipPath) || !string.Equals(ComputeSha256(update.ZipPath), update.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("The prepared update is missing or changed. Download it again.");
+            string zipPath = update.ZipPath;
+            string tempRoot = Path.GetDirectoryName(zipPath);
             string exePath = Application.ExecutablePath;
             string appDir = Path.GetDirectoryName(exePath);
             string updaterPath = Path.Combine(appDir, "YTMusicLite.Updater.exe");
@@ -214,15 +224,16 @@ namespace YTMusicLite
             });
         }
 
-        private static async Task DownloadFileAsync(string url, string path)
+        private static async Task DownloadFileAsync(string url, string path, IProgress<int> progress)
         {
-            await Task.Run(delegate
+            using (WebClient client = CreateClient())
             {
-                using (WebClient client = CreateClient())
+                client.DownloadProgressChanged += delegate(object sender, DownloadProgressChangedEventArgs e)
                 {
-                    client.DownloadFile(url, path);
-                }
-            });
+                    if (progress != null) progress.Report(e.ProgressPercentage);
+                };
+                await client.DownloadFileTaskAsync(new Uri(url), path);
+            }
         }
 
         private static WebClient CreateClient()
@@ -265,6 +276,12 @@ namespace YTMusicLite
         }
     }
 
+    public sealed class PreparedUpdate
+    {
+        public string ZipPath { get; internal set; }
+        public string Sha256 { get; internal set; }
+    }
+
     public sealed class UpdateCheckResult
     {
         public bool UpdateAvailable { get; set; }
@@ -275,6 +292,7 @@ namespace YTMusicLite
         public string ChecksumUrl { get; set; }
         public string ReleasePageUrl { get; set; }
         public string Message { get; set; }
+        public string ReleaseNotes { get; set; }
 
         public static UpdateCheckResult NoUpdate(string message)
         {
