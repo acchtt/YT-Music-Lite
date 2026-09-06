@@ -57,19 +57,18 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.1.9
+          tag_name: ytmlite-v4.2.0
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.1.9
+          name: YT Music Lite v4.2.0
           body: |
-            YT Music Lite v4.1.9
+            YT Music Lite v4.2.0
 
-            - Fixes navigation arrows, keyboard access, focus, and playback tooltips.
-            - Adds clear sleep/resume and connection-error/retry screens.
-            - Remembers mini-player placement and always-on-top preference.
-            - Adds draggable and keyboard-accessible sliders with time previews.
-            - Improves Settings readability, layout scaling, and tray guidance.
-            - Shows update notes and download progress, with explicit restart after verification.
-            - Keeps YouTube Music's official player and playback actions.
+            - Introduces a new coral music-note/play logo throughout the app and system tray.
+            - Embeds a multi-resolution Windows application icon.
+            - Redesigns the floating mini player with larger artwork, clearer track information, and a prominent playback button.
+            - Adds dedicated pin, expand, close, and mute controls with a draggable header.
+            - Unifies native icons with rounded strokes and consistent hover, focus, and active states.
+            - Preserves keyboard controls, saved mini-player placement, official YouTube Music playback, and verified in-app updates.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.1.9-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.1.9-win-x64.zip.sha256
+            yt-music-lite/release/YTMusicLite-v4.2.0-win-x64.zip
+            yt-music-lite/release/YTMusicLite-v4.2.0-win-x64.zip.sha256

@@ -1,7 +1,7 @@
-YT Music Lite v4.1.9
+YT Music Lite v4.2.0
 Base: YTMusicLite-WebView2-Test-v3
 WebView2 SDK: 1.0.4191.47
 Architecture: C# WinForms + WebView2
 Update channel: acchtt/YT-Music-Lite / ytmlite-v*
 Release: stable
-Changes: improves native navigation, keyboard access, tooltips, sleep and retry screens, mini-player controls and placement, Settings layouts, tray guidance, and verified updates with an explicit restart action.
+Changes: introduces a new native logo and multi-resolution Windows icon, a redesigned floating mini player, and a consistent rounded icon set. Preserves accessible playback controls, saved placement, official YouTube Music playback, and verified updates.
