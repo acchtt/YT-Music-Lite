@@ -644,6 +644,11 @@ namespace YTMusicLite
                 lastState = state;
                 UpdateNowPlaying(state);
                 miniPlayer.UpdatePlayer(state);
+                // A track can stop after the window has already gone to the tray.
+                // Re-check actual media state rather than only the minimize event.
+                stateTimer.Interval = state.Paused ? 3000 : 850;
+                if (state.Paused && (!Visible || WindowState == FormWindowState.Minimized))
+                    await SuspendWebViewAsync(false);
                 // Playback state belongs to the player, never the app notification area.
             }
             catch
@@ -766,9 +771,9 @@ namespace YTMusicLite
         private async Task HandleWindowStateAsync()
         {
             if (!initialized) return;
-            if (WindowState == FormWindowState.Minimized && minimizeToTray)
+            if (WindowState == FormWindowState.Minimized)
             {
-                HideToTray();
+                if (minimizeToTray) HideToTray();
                 if (lastState.Paused) await SuspendWebViewAsync(false);
             }
             else if (WindowState != FormWindowState.Minimized && autoSuspended && !manualSleep)
@@ -799,6 +804,7 @@ namespace YTMusicLite
                 }
                 if (ok)
                 {
+                    stateTimer.Stop();
                     manualSleep = manual;
                     autoSuspended = !manual;
                     if (manual) ShowState("Taking a break", "Music paused to save resources.", "Resume", delegate { WakeWebView(); web.Focus(); });
@@ -824,6 +830,7 @@ namespace YTMusicLite
             if (web.CoreWebView2 != null) web.CoreWebView2.Resume();
             manualSleep = false;
             autoSuspended = false;
+            stateTimer.Start();
             web.Visible = true;
             HideState();
             status.Text = "";
