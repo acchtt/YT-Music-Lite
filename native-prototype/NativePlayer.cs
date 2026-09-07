@@ -170,8 +170,9 @@ internal sealed class NativePlayer : Form
             using (var reader = new StreamReader(pipe))
             {
                 writer.AutoFlush = true;
-                // mpv accepts plain commands on its IPC connection, returning JSON replies.
-                await writer.WriteLineAsync(command);
+                // Only internal, fixed command tokens reach this method.
+                string message = "{\"command\":[" + string.Join(",", command.Split(' ').Select(x => "\"" + x + "\"")) + "],\"request_id\":1}";
+                await writer.WriteLineAsync(message);
                 for (int i = 0; i < 30; i++)
                 {
                     var line = reader.ReadLineAsync();
