@@ -1,4 +1,4 @@
-YT Music Lite v4.2.0
+YT Music Lite v4.2.1
 Base: YTMusicLite-WebView2-Test-v3
 WebView2 SDK: 1.0.4191.47
 Architecture: C# WinForms + WebView2
