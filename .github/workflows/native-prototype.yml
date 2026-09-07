@@ -18,6 +18,14 @@ jobs:
       - name: Build and measure real native playback
         shell: pwsh
         run: ./native-prototype/measure.ps1
+      - name: Check native music navigation
+        shell: pwsh
+        run: |
+          Push-Location native-prototype/build
+          $app = Start-Process ./YTMusicLite.Native.exe -ArgumentList '--ui-check' -PassThru
+          if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'UI check timed out' }
+          if (-not (Test-Path ui-check.txt) -or (Get-Content ui-check.txt -Raw) -notmatch '^PASS:') { throw 'Native UI check failed' }
+          Pop-Location
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -26,3 +34,4 @@ jobs:
             native-prototype/build/*.exe
             native-prototype/build/*.csv
             native-prototype/build/*.txt
+            native-prototype/build/*.png

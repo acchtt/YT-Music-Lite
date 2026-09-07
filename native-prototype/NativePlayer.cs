@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 
 // Deliberately independent of WebView2 and the released application.
-internal sealed class NativePlayer : Form
+internal sealed partial class NativePlayer : Form
 {
     readonly TextBox input = new TextBox { Dock = DockStyle.Fill };
     readonly Label status = new Label { Dock = DockStyle.Fill, Text = "Paste a YouTube link or open an audio file.", AutoEllipsis = true };
@@ -34,31 +34,18 @@ internal sealed class NativePlayer : Form
 
     NativePlayer(string[] args)
     {
-        benchmark = args.Length == 2 && args[0] == "--benchmark";
-        Text = "YT Music Lite — Native playback prototype";
-        Size = new Size(620, 190); MinimumSize = new Size(500, 190);
-        Font = new Font("Segoe UI", 10); StartPosition = FormStartPosition.CenterScreen;
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), RowCount = 3, ColumnCount = 1 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill };
-        var open = new Button { Text = "Open file", AutoSize = true };
-        buttons.Controls.AddRange(new Control[] { play, pause, stop, open });
-        layout.Controls.Add(input, 0, 0); layout.Controls.Add(buttons, 0, 1); layout.Controls.Add(status, 0, 2);
-        Controls.Add(layout);
+        bool uiCheck = args.Length == 1 && args[0] == "--ui-check";
+        benchmark = uiCheck || (args.Length == 2 && args[0] == "--benchmark");
+        BuildMusicUi();
         play.Click += async delegate { await PlayAsync(); };
         pause.Click += async delegate {
             try { await CommandAsync("cycle pause"); status.Text = "Pause toggled"; }
             catch (Exception e) { status.Text = e.Message; }
         };
-        stop.Click += delegate { Stop(); status.Text = "Stopped — playback processes released"; };
-        open.Click += delegate {
-            using (var dialog = new OpenFileDialog { Filter = "Audio files|*.mp3;*.m4a;*.ogg;*.opus;*.wav;*.flac|All files|*.*" })
-                if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.FileName;
-        };
-        FormClosing += delegate { closing = true; automation.Stop(); Stop(); };
-        if (benchmark)
+        stop.Click += delegate { queueIndex = -1; Stop(); status.Text = "Stopped — playback processes released"; };
+        FormClosing += delegate { closing = true; automation.Stop(); if (searchProcess != null) KillTree(searchProcess); if (mini != null) mini.Close(); Stop(); };
+        if (uiCheck) Shown += delegate { RunUiCheck(); };
+        if (benchmark && !uiCheck)
         {
             input.Text = args[1];
             automation.Tick += async delegate {
@@ -153,7 +140,8 @@ internal sealed class NativePlayer : Form
             if (request != generation || closing) return;
             pipeName = "ytml-native-" + Guid.NewGuid().ToString("N");
             player = Start(mpv, "--input-ipc-server=" + pipeName + " --no-config --no-video --ytdl=no --terminal=no --cache=yes --demuxer-max-bytes=8MiB --demuxer-max-back-bytes=0 --cache-secs=10 " + (benchmark ? "--ao=null " : "") + "-- " + Quote(source), false);
-            status.Text = "Playing audio — no browser engine";
+            status.Text = "Playing";
+            WatchPlayer(player, request);
         }
         catch (Exception e) { if (!closing && request == generation) status.Text = e.Message; }
         finally { if (resolver != null) { KillTree(resolver); resolver.Dispose(); resolver = null; } busy = false; if (!closing) play.Enabled = true; }
