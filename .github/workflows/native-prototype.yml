@@ -1,0 +1,27 @@
+name: Native playback prototype
+on:
+  pull_request:
+    paths: ['native-prototype/**', '.github/workflows/native-prototype.yml']
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install audio test dependency
+        shell: pwsh
+        run: |
+          choco install mpv --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'mpv installation failed' }
+      - name: Build and measure real native playback
+        shell: pwsh
+        run: ./native-prototype/measure.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-playback-prototype
+          path: |
+            native-prototype/build/*.exe
+            native-prototype/build/*.csv
+            native-prototype/build/*.txt
