@@ -167,7 +167,7 @@ internal sealed class NativePlayer : Form
         {
             await Task.Run(delegate { pipe.Connect(2000); });
             using (var writer = new StreamWriter(pipe, new System.Text.UTF8Encoding(false), 1024, true))
-            using (var reader = new StreamReader(pipe))
+            using (var reader = new StreamReader(pipe, System.Text.Encoding.UTF8, true, 1024, true))
             {
                 writer.AutoFlush = true;
                 // Only internal, fixed command tokens reach this method.
