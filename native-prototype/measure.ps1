@@ -30,9 +30,10 @@ try {
                 if ($known.Contains([int]$item.ParentProcessId) -and $known.Add([int]$item.ProcessId)) { $added = $true }
             }
         } while ($added)
+        $sampleSeconds = [Math]::Round($clock.Elapsed.TotalSeconds,2)
         foreach ($item in $all) {
             if ($known.Contains([int]$item.ProcessId)) {
-                $rows += [pscustomobject]@{ Seconds=[Math]::Round($clock.Elapsed.TotalSeconds,2); PID=$item.ProcessId; Name=$item.Name; WorkingSetMiB=[Math]::Round([double]$item.WorkingSetSize/1MB,2); PrivateMiB=[Math]::Round([double]$item.PrivatePageCount/1MB,2) }
+                $rows += [pscustomobject]@{ Seconds=$sampleSeconds; PID=$item.ProcessId; Name=$item.Name; WorkingSetMiB=[Math]::Round([double]$item.WorkingSetSize/1MB,2); PrivateMiB=[Math]::Round([double]$item.PrivatePageCount/1MB,2) }
             }
         }
         Start-Sleep -Milliseconds 500
