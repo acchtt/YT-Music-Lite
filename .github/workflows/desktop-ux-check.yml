@@ -2,7 +2,7 @@ name: Windows desktop UI checks
 
 on:
   push:
-    branches: [improve/desktop-ux, design/visual-refresh]
+    branches: [improve/desktop-ux, design/visual-refresh, design/clean-topbar]
   pull_request:
     paths:
       - 'yt-music-lite/**'

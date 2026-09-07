@@ -132,6 +132,9 @@ namespace YTMusicLiteSmoke
                     showState.Invoke(main, new object[] { "Couldn’t load your music", "Check your connection, then try again.", "Retry", new Action(delegate { }) });
                     Application.DoEvents();
                     Capture(main, "retry-screen.png");
+                    main.Size = main.MinimumSize;
+                    Application.DoEvents();
+                    Capture(main, "toolbar-minimum-window.png");
                     main.Hide();
                     MiniPlayerForm mini = Field<MiniPlayerForm>(main, "miniPlayer");
                     mini.UpdatePlayer(new PlayerState { Title = "A long track title for layout verification", Artist = "Artist name", Duration = 240, CurrentTime = 61, Volume = 0.5, Paused = false });

@@ -108,24 +108,8 @@ namespace YTMusicLite
 
             topBar = new Panel();
             topBar.Dock = DockStyle.Top;
-            topBar.Height = 54;
-            topBar.BackColor = Color.FromArgb(18, 18, 18);
-
-            Label brandMark = new Label();
-            brandMark.Text = "●";
-            brandMark.ForeColor = Color.FromArgb(255, 50, 72);
-            brandMark.Font = new Font("Segoe UI", 15f, FontStyle.Bold);
-            brandMark.Location = new Point(15, 13);
-            brandMark.AutoSize = true;
-            topBar.Controls.Add(brandMark);
-
-            Label brand = new Label();
-            brand.Text = "YT Music Lite";
-            brand.ForeColor = Color.White;
-            brand.Font = new Font("Segoe UI", 11.5f, FontStyle.Bold);
-            brand.Location = new Point(40, 16);
-            brand.Size = new Size(116, 25);
-            topBar.Controls.Add(brand);
+            topBar.Height = 52;
+            topBar.BackColor = Color.FromArgb(20, 21, 25);
 
             int navX = 165;
             LiteButton back = backButton = MakeTopButton("‹", navX, "Back");
@@ -158,6 +142,12 @@ namespace YTMusicLite
             miniButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             miniButton.Location = new Point(ClientSize.Width - 90, 9);
             miniButton.Click += delegate { ShowMiniPlayer(); };
+            miniButton.Text = "Mini player";
+            miniButton.DrawnIcon = IconKind.MiniPlayer;
+            miniButton.ShowIconCaption = true;
+            miniButton.IconStyle = IconButtonStyle.Soft;
+            miniButton.Font = new Font("Segoe UI", 9.5f);
+            miniButton.Size = new Size(122, 34);
 
             updateBadge = new LiteButton();
             updateBadge.AccessibleName = "App updates";
@@ -176,33 +166,35 @@ namespace YTMusicLite
             tips.SetToolTip(updateBadge, "A new YT Music Lite version is available");
             topBar.Controls.Add(updateBadge);
 
-            TableLayoutPanel toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, RowCount = 1, Padding = new Padding(8, 4, 8, 4) };
-            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            TableLayoutPanel toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1, Padding = new Padding(14, 6, 12, 6) };
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 184));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            brandMark.Visible = brand.Visible = false;
             BrandLogoControl logo = new BrandLogoControl { Dock = DockStyle.Fill, Cursor = Cursors.Default };
             toolbar.Controls.Add(logo, 0, 0);
-            FlowLayoutPanel navigation = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Anchor = AnchorStyles.Left, Margin = Padding.Empty };
+            FlowLayoutPanel navigation = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Anchor = AnchorStyles.Left, Margin = Padding.Empty, Padding = new Padding(3, 0, 3, 0), BackColor = Color.FromArgb(28, 30, 35) };
             foreach (LiteButton button in new LiteButton[] { back, forward, reload, home })
             {
-                button.Margin = new Padding(0, 0, 4, 0);
+                button.Margin = new Padding(1, 0, 1, 0);
                 navigation.Controls.Add(button);
             }
             toolbar.Controls.Add(navigation, 1, 0);
+            status.Margin = new Padding(14, 0, 6, 0);
             status.Dock = DockStyle.Fill;
             status.TextAlign = ContentAlignment.MiddleLeft;
             toolbar.Controls.Add(status, 2, 0);
             updateBadge.Anchor = miniButton.Anchor = settingsButton.Anchor = AnchorStyles.None;
             toolbar.Controls.Add(updateBadge, 3, 0);
             toolbar.Controls.Add(miniButton, 4, 0);
+            settingsButton.Margin = new Padding(8, 0, 0, 0);
             toolbar.Controls.Add(settingsButton, 5, 0);
             topBar.Controls.Add(toolbar);
+            Panel toolbarLine = new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Color.FromArgb(39, 41, 47) };
+            topBar.Controls.Add(toolbarLine);
 
             web = new WebView2();
             web.Dock = DockStyle.Fill;
