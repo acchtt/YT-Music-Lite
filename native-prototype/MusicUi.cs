@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
@@ -11,6 +12,7 @@ using System.Windows.Forms;
 internal sealed partial class NativePlayer
 {
     const string SearchHint = "What do you want to play?";
+    [DllImport("user32.dll")] static extern bool ShowScrollBar(IntPtr handle, int bar, bool show);
     public sealed class Track { public string Title { get; set; } public string Artist { get; set; } public string Source { get; set; } }
     public sealed class Collection { public List<Track> Tracks = new List<Track>(); public Dictionary<string, List<Track>> Playlists = new Dictionary<string, List<Track>>(); }
     readonly Color background = MusicTheme.Canvas, surface = MusicTheme.Raised, accent = MusicTheme.Accent;
@@ -91,7 +93,7 @@ internal sealed partial class NativePlayer
         if (tracks == null || tracks.Columns.Count < 4) return;
         if (tracks.ClientSize.Width < 650)
         {
-            int compact = Math.Max(410, tracks.ClientSize.Width - 55); tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(235, (compact - 42) * 60 / 100); tracks.Columns[2].Width = Math.Max(130, compact - tracks.Columns[0].Width - tracks.Columns[1].Width); tracks.Columns[3].Width = 0; return;
+            int compact = Math.Max(410, tracks.ClientSize.Width - 55); tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(235, (compact - 42) * 60 / 100); tracks.Columns[2].Width = Math.Max(130, compact - tracks.Columns[0].Width - tracks.Columns[1].Width); tracks.Columns[3].Width = 0; ShowScrollBar(tracks.Handle, 0, false); return;
         }
         int available = tracks.ClientSize.Width - 30;
         tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(200, (available - 42) * 45 / 100); tracks.Columns[2].Width = Math.Max(130, (available - 42) * 31 / 100); tracks.Columns[3].Width = Math.Max(100, available - tracks.Columns[0].Width - tracks.Columns[1].Width - tracks.Columns[2].Width);
@@ -217,7 +219,7 @@ internal sealed partial class NativePlayer
             ShowPage("Library", null); if (tracks.Items.Count != 1) throw new Exception("Library navigation failed"); ShowPage("Playlist", "Night Mix"); if (tracks.Items.Count != 1 || heading.Text != "Night Mix") throw new Exception("Playlist navigation failed");
             queue.Add(track); queue.Add(track); queueIndex = 1; ShowPage("Queue", null); tracks.Items[0].Selected = true; RemoveSelected(); if (queue.Count != 1 || queueIndex != 0) throw new Exception("Queue removal failed");
             ShowPage("Search", null); if (tracks.Items.Count != 0) throw new Exception("Search state leaked tracks"); ShowPage("Settings", null); if (actions.Controls.Count != 1 || !subtitle.Text.Contains(YTMusicLiteNative.UpdateService.CurrentVersion)) throw new Exception("Settings failed"); ShowPage("Home", null); ShowMini(); if (mini == null) throw new Exception("Mini player failed"); using (var bitmap = new Bitmap(mini.Width, mini.Height)) { mini.DrawToBitmap(bitmap, new Rectangle(Point.Empty, mini.Size)); bitmap.Save("spotify-mini.png"); } mini.Close();
-            using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("spotify-home.png"); } Size = MinimumSize; using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("spotify-compact.png"); }
+            using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("spotify-home.png"); } Size = MinimumSize; ResizeTrackColumns(); ShowScrollBar(tracks.Handle, 0, false); using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("spotify-compact.png"); }
             File.WriteAllText("ui-check.txt", "PASS: Spotify-style layout, navigation, playlists, queue, search, settings, mini player");
         }
         catch (Exception e) { File.WriteAllText("ui-check.txt", "FAIL: " + e); Environment.ExitCode = 1; } Close();
