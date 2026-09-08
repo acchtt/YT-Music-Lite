@@ -23,5 +23,5 @@ if ($LASTEXITCODE -ne 0) { throw 'Native app compilation failed' }
 $updater = Join-Path $nativeBuild 'YTMusicLite.Updater.exe'
 & $csc /nologo /target:winexe /platform:x64 /optimize+ /langversion:5 "/out:$updater" /reference:System.dll /reference:System.Core.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $brandRoot 'Updater.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
-Set-Content -Path (Join-Path $nativeBuild 'VERSION.txt') -Value '5.0.0' -Encoding ASCII
+Set-Content -Path (Join-Path $nativeBuild 'VERSION.txt') -Value '5.1.0' -Encoding ASCII
 Write-Host "Native build complete: $output" -ForegroundColor Green

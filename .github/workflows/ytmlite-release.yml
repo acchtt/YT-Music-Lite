@@ -59,17 +59,17 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v5.0.0
+          tag_name: ytmlite-v5.1.0
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v5.0.0
+          name: YT Music Lite v5.1.0
           body: |
-            YT Music Lite v5.0.0
+            YT Music Lite v5.1.0
 
-            - Replaces the embedded browser with a native Windows music interface.
-            - Adds Home, Search, Library, Queue, local playlists, audio import, and a native mini player.
-            - Includes mpv, yt-dlp, and Deno so no manual playback-tool installation is required.
-            - Uses on-demand search and stream resolution to keep idle memory low.
-            - Keeps verified in-app updates through Settings.
+            - Introduces a modern dark music-library interface with selected sidebar navigation.
+            - Adds quick-access Home cards and artwork-led track rows.
+            - Redesigns search, actions, the persistent player bar, and mini player.
+            - Adapts the track table for compact windows without clipping or unnecessary scroll chrome.
+            - Preserves native playback, local playlists, queue controls, and low memory use.
           files: |
-            native-prototype/release/YTMusicLite-v5.0.0-win-x64.zip
-            native-prototype/release/YTMusicLite-v5.0.0-win-x64.zip.sha256
+            native-prototype/release/YTMusicLite-v5.1.0-win-x64.zip
+            native-prototype/release/YTMusicLite-v5.1.0-win-x64.zip.sha256
