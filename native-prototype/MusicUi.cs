@@ -152,7 +152,7 @@ internal sealed partial class NativePlayer
     void RenderTracks()
     {
         var items = VisibleTracks(); tracks.BeginUpdate(); tracks.Items.Clear(); int index = 1;
-        foreach (var track in items) tracks.Items.Add(new ListViewItem(new[] { (index++).ToString(), track.Title ?? "Untitled", track.Artist ?? "Unknown artist", SourceLabel(track.Source) }) { Tag = track }); tracks.EndUpdate();
+        foreach (var track in items) tracks.Items.Add(new ListViewItem(new[] { (index++).ToString(), track.Title ?? "Untitled", track.Artist ?? "Unknown artist", SourceLabel(track.Source) }) { Tag = track }); tracks.EndUpdate(); ShowScrollBar(tracks.Handle, 1, items.Count * 54 + 28 > tracks.ClientSize.Height);
         if (items.Count == 0) subtitle.Text = page == "Search" ? "Search for songs and artists" : (page == "Queue" ? "Your queue is empty" : "Start with Search or import audio from your computer"); else subtitle.Text = items.Count + (items.Count == 1 ? " song" : " songs");
     }
 
