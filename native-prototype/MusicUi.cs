@@ -93,10 +93,11 @@ internal sealed partial class NativePlayer
         if (tracks == null || tracks.Columns.Count < 4) return;
         if (tracks.ClientSize.Width < 650)
         {
-            int compact = Math.Max(410, tracks.ClientSize.Width - 55); tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(235, (compact - 42) * 60 / 100); tracks.Columns[2].Width = Math.Max(130, compact - tracks.Columns[0].Width - tracks.Columns[1].Width); tracks.Columns[3].Width = 0; ShowScrollBar(tracks.Handle, 0, false); return;
+            int compact = Math.Max(410, tracks.ClientSize.Width - 4); tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(235, (compact - 42) * 60 / 100); tracks.Columns[2].Width = Math.Max(130, compact - tracks.Columns[0].Width - tracks.Columns[1].Width); tracks.Columns[3].Width = 0; ShowScrollBar(tracks.Handle, 0, false); return;
         }
-        int available = tracks.ClientSize.Width - 30;
+        int available = tracks.ClientSize.Width - 4;
         tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(200, (available - 42) * 45 / 100); tracks.Columns[2].Width = Math.Max(130, (available - 42) * 31 / 100); tracks.Columns[3].Width = Math.Max(100, available - tracks.Columns[0].Width - tracks.Columns[1].Width - tracks.Columns[2].Width);
+        ShowScrollBar(tracks.Handle, 0, false);
     }
 
     Control BuildPlayerBar()
