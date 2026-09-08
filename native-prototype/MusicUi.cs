@@ -4,15 +4,13 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 internal sealed partial class NativePlayer
 {
-    const int EmSetCueBanner = 0x1501;
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr handle, int message, IntPtr showWhenFocused, string text);
+    const string SearchHint = "What do you want to play?";
     public sealed class Track { public string Title { get; set; } public string Artist { get; set; } public string Source { get; set; } }
     public sealed class Collection { public List<Track> Tracks = new List<Track>(); public Dictionary<string, List<Track>> Playlists = new Dictionary<string, List<Track>>(); }
     readonly Color background = MusicTheme.Canvas, surface = MusicTheme.Raised, accent = MusicTheme.Accent;
@@ -29,6 +27,7 @@ internal sealed partial class NativePlayer
     int queueIndex = -1;
     Process searchProcess;
     Form mini;
+    bool searchHintVisible;
     readonly string libraryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YTMusicLiteNative", "library.json");
 
     Button UiButton(string text, Action action)
@@ -67,8 +66,10 @@ internal sealed partial class NativePlayer
         var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = MusicTheme.Canvas };
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
         var searchShell = new RoundPanel { Dock = DockStyle.Left, Width = 430, Height = 40, Radius = 20, Margin = new Padding(0, 8, 0, 8), BackColor = Color.White, Padding = new Padding(17, 10, 12, 7) };
-        search = new TextBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, BackColor = Color.White, ForeColor = Color.FromArgb(25, 25, 25), Font = new Font("Segoe UI", 10), AccessibleName = "Search songs or artists" };
-        search.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(); } }; searchShell.Controls.Add(search); SendMessage(search.Handle, EmSetCueBanner, IntPtr.Zero, "What do you want to play?");
+        search = new TextBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, BackColor = Color.White, ForeColor = Color.FromArgb(90, 90, 90), Font = new Font("Segoe UI", 10), AccessibleName = "Search songs or artists", Text = SearchHint }; searchHintVisible = true;
+        search.GotFocus += delegate { if (searchHintVisible) { search.Text = ""; search.ForeColor = Color.FromArgb(25, 25, 25); searchHintVisible = false; } };
+        search.LostFocus += delegate { if (string.IsNullOrWhiteSpace(search.Text)) { search.Text = SearchHint; search.ForeColor = Color.FromArgb(90, 90, 90); searchHintVisible = true; } };
+        search.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(); } }; searchShell.Controls.Add(search);
         var searchButton = new MusicButton { Text = "Search", Dock = DockStyle.Fill, Margin = new Padding(8), BackColor = MusicTheme.Raised, AccessibleName = "Search" }; searchButton.Click += async delegate { await SearchAsync(); };
         top.Controls.Add(searchShell, 0, 0); top.Controls.Add(searchButton, 1, 0);
 
@@ -87,8 +88,8 @@ internal sealed partial class NativePlayer
 
     void ResizeTrackColumns()
     {
-        if (tracks == null || tracks.Columns.Count < 4) return; int available = Math.Max(540, tracks.ClientSize.Width - 6);
-        tracks.Columns[0].Width = 46; tracks.Columns[1].Width = Math.Max(230, (available - 46) * 45 / 100); tracks.Columns[2].Width = Math.Max(155, (available - 46) * 31 / 100); tracks.Columns[3].Width = Math.Max(105, available - tracks.Columns[0].Width - tracks.Columns[1].Width - tracks.Columns[2].Width);
+        if (tracks == null || tracks.Columns.Count < 4) return; int available = Math.Max(476, tracks.ClientSize.Width - 30);
+        tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(200, (available - 42) * 45 / 100); tracks.Columns[2].Width = Math.Max(130, (available - 42) * 31 / 100); tracks.Columns[3].Width = Math.Max(100, available - tracks.Columns[0].Width - tracks.Columns[1].Width - tracks.Columns[2].Width);
     }
 
     Control BuildPlayerBar()
@@ -115,7 +116,7 @@ internal sealed partial class NativePlayer
     void RefreshNavigation()
     {
         foreach (Control c in navigation.Controls.Cast<Control>().ToArray()) c.Dispose(); navButtons.Clear(); AddNav("Home"); AddNav("Search"); AddNav("Library"); AddNav("Queue"); AddNav("Settings");
-        navigation.Controls.Add(new Label { Text = "YOUR PLAYLISTS", Width = 172, Height = 38, Padding = new Padding(12, 14, 0, 0), ForeColor = MusicTheme.Muted, Font = new Font("Segoe UI", 8, FontStyle.Bold) });
+        navigation.Controls.Add(new Label { Text = "YOUR PLAYLISTS", Width = 168, Height = 38, Margin = Padding.Empty, Padding = new Padding(12, 14, 0, 0), ForeColor = MusicTheme.Muted, Font = new Font("Segoe UI", 8, FontStyle.Bold) });
         var create = new NavButton { Text = "+  Create playlist", Font = new Font("Segoe UI", 9, FontStyle.Bold), AccessibleName = "Create playlist" }; create.Click += delegate { CreatePlaylist(); }; navigation.Controls.Add(create);
         foreach (string name in library.Playlists.Keys.OrderBy(x => x)) { string target = name; var button = new NavButton { Text = target, Font = new Font("Segoe UI", 9), AccessibleName = "Playlist " + target }; button.Click += delegate { ShowPage("Playlist", target); }; navigation.Controls.Add(button); navButtons["Playlist:" + target] = button; }
     }
@@ -130,7 +131,7 @@ internal sealed partial class NativePlayer
         if (name == "Settings") { actions.Controls.Add(UiButton("Check for updates", async delegate { await CheckUpdatesAsync(); })); RenderTracks(); subtitle.Text = "YT Music Lite " + YTMusicLiteNative.UpdateService.CurrentVersion + " · Native playback · Low memory mode"; return; }
         actions.Controls.Add(UiButton("Play", async delegate { await PlaySelected(); })); actions.Controls.Add(UiButton("Add to queue", AddSelectedToQueue)); actions.Controls.Add(UiButton("Save", SaveSelected)); actions.Controls.Add(UiButton("Add to playlist", AddToPlaylist));
         if (name == "Home" || name == "Library") actions.Controls.Add(UiButton("Import audio", ImportAudio)); if (name == "Queue" || name == "Playlist" || name == "Library") actions.Controls.Add(UiButton("Remove", RemoveSelected));
-        if (name == "Home") PopulateQuickCards(); RenderTracks(); if (name == "Search") search.Focus();
+        if (name == "Home") PopulateQuickCards(); RenderTracks(); if (name == "Search") search.Focus(); else navigation.Focus();
     }
 
     string Greeting() { int hour = DateTime.Now.Hour; return hour < 12 ? "Good morning" : (hour < 18 ? "Good afternoon" : "Good evening"); }
@@ -188,7 +189,7 @@ internal sealed partial class NativePlayer
 
     async Task SearchAsync()
     {
-        if (searchProcess != null || string.IsNullOrWhiteSpace(search.Text)) return; Process process = null;
+        if (searchProcess != null || searchHintVisible || string.IsNullOrWhiteSpace(search.Text)) return; Process process = null;
         try
         {
             string query = search.Text.Trim(); ShowPage("Search", null); subtitle.Text = "Searching for “" + query + "”…"; string deno = FindTool("deno");
