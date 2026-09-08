@@ -128,7 +128,8 @@ namespace YTMusicLite.Client
                 throw new TimeoutException("YouTube took too long to prepare this song.");
             }
             await exited;
-            string url = (await output).Trim().Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)[0];
+            string[] urls = (await output).Trim().Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            string url = urls.Length == 0 ? "" : urls[0];
             string error = await errors;
             lock (gate) if (resolver == process) resolver = null;
             if (request != generation) throw new OperationCanceledException();

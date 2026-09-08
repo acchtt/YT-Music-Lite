@@ -490,7 +490,7 @@ namespace YTMusicLite.Client
             base.WndProc(ref message);
         }
 
-        private void Closing(object sender, FormClosingEventArgs e)
+        private void HandleFormClosing(object sender, FormClosingEventArgs e)
         {
             closing = true;
             catalog.Dispose();

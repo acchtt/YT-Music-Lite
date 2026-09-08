@@ -60,13 +60,15 @@ namespace YTMusicLite.Client
             IconButton expandButton = HeaderButton(AppIcon.Mini, "Return to main window"); expandButton.Dock = DockStyle.Right; expandButton.Click += delegate { expand(); Close(); };
             pin = HeaderButton(AppIcon.Check, "Always on top"); pin.Dock = DockStyle.Right; pin.Checked = true; pin.Click += delegate { TopMost = !TopMost; pin.Checked = TopMost; pin.Invalidate(); };
             header.Controls.Add(close); header.Controls.Add(expandButton); header.Controls.Add(pin);
+            header.BringToFront();
             body.Controls.Add(header);
 
             TableLayoutPanel content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Theme.Sidebar, Padding = new Padding(0, 34, 0, 0) };
             content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
             content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             body.Controls.Add(content);
-            artwork = new ArtworkControl { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 14, 0), Radius = 10, KeyText = "YT Music Lite" };
+            header.BringToFront();
+            artwork = new ArtworkControl { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 14, 0), Radius = 10, KeyText = "♪" };
             content.Controls.Add(artwork, 0, 0);
 
             TableLayoutPanel details = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, BackColor = Theme.Sidebar };

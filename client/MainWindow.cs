@@ -33,10 +33,11 @@ namespace YTMusicLite.Client
         private Label heading;
         private Label subtitle;
         private TextBox searchBox;
-        private PillButton searchButton;
+        private IconButton searchButton;
         private IconButton backButton;
         private IconButton forwardButton;
         private FlowLayoutPanel actionBar;
+        private RowStyle actionRow;
         private FlowLayoutPanel homeTiles;
         private RowStyle homeRow;
         private TrackListControl trackList;
@@ -73,7 +74,7 @@ namespace YTMusicLite.Client
             BuildTray();
             RefreshPlaylistNavigation();
             Navigate(AppPage.Home, null, true);
-            FormClosing += Closing;
+            FormClosing += HandleFormClosing;
             KeyPreview = true;
             KeyDown += MainKeyDown;
             if (automation) Shown += delegate { BeginInvoke((Action)RunUiCheck); };
@@ -171,7 +172,8 @@ namespace YTMusicLite.Client
             TableLayoutPanel layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, BackColor = Theme.Window, Margin = Padding.Empty };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+            actionRow = new RowStyle(SizeType.Absolute, 52);
+            layout.RowStyles.Add(actionRow);
             homeRow = new RowStyle(SizeType.Absolute, 0);
             layout.RowStyles.Add(homeRow);
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -185,7 +187,7 @@ namespace YTMusicLite.Client
             header.Controls.Add(heading);
             layout.Controls.Add(header, 0, 1);
 
-            actionBar = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true, BackColor = Theme.Window, Padding = new Padding(0, 6, 0, 6) };
+            actionBar = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, AutoScroll = false, BackColor = Theme.Window, Padding = new Padding(0, 6, 0, 6) };
             layout.Controls.Add(actionBar, 0, 2);
 
             homeTiles = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true, BackColor = Theme.Window, Padding = new Padding(0, 6, 0, 10) };
@@ -200,6 +202,7 @@ namespace YTMusicLite.Client
             settingsPanel = BuildSettingsPanel();
             body.Controls.Add(settingsPanel);
             layout.Controls.Add(body, 0, 4);
+            host.Resize += delegate { actionRow.Height = host.ClientSize.Width < 760 ? 88 : 52; };
             return host;
         }
 
@@ -208,7 +211,7 @@ namespace YTMusicLite.Client
             TableLayoutPanel top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Theme.Window, Margin = Padding.Empty };
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 58));
             FlowLayoutPanel historyButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Window, Padding = new Padding(0, 8, 0, 0) };
             backButton = new IconButton { Icon = AppIcon.Back, AccessibleName = "Back", Enabled = false };
             forwardButton = new IconButton { Icon = AppIcon.Forward, AccessibleName = "Forward", Enabled = false };
@@ -223,7 +226,7 @@ namespace YTMusicLite.Client
             searchBox.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(); } };
             searchShell.Controls.Add(searchBox);
             top.Controls.Add(searchShell, 1, 0);
-            searchButton = new PillButton { Label = "Search", ShowIcon = true, Icon = AppIcon.Search, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 8), AccessibleName = "Search" };
+            searchButton = new IconButton { Icon = AppIcon.Search, Accent = true, Dock = DockStyle.Fill, Margin = new Padding(4, 8, 4, 8), AccessibleName = "Search" };
             searchButton.Click += async delegate { await SearchAsync(); };
             top.Controls.Add(searchButton, 2, 0);
             return top;
@@ -245,7 +248,7 @@ namespace YTMusicLite.Client
             info.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
             info.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
             info.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            playerArtwork = new ArtworkControl { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0), Radius = 9, KeyText = "YT Music Lite" };
+            playerArtwork = new ArtworkControl { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 12, 0), Radius = 9, KeyText = "♪" };
             info.Controls.Add(playerArtwork, 0, 0); info.SetRowSpan(playerArtwork, 3);
             playerTitle = new Label { Text = "Nothing playing", Dock = DockStyle.Fill, ForeColor = Theme.Text, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), TextAlign = ContentAlignment.BottomLeft, AutoEllipsis = true };
             playerArtist = new Label { Text = "Choose something from Home or Search", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.TopLeft, AutoEllipsis = true };
@@ -264,7 +267,8 @@ namespace YTMusicLite.Client
             playPauseButton = PlayerIcon(AppIcon.Play, "Play or pause"); playPauseButton.Accent = true; playPauseButton.Size = new Size(46, 46); playPauseButton.Click += async delegate { await TogglePlaybackAsync(); };
             IconButton next = PlayerIcon(AppIcon.Next, "Next song"); next.Click += async delegate { await MoveQueueAsync(1); };
             transport.Controls.Add(previous); transport.Controls.Add(playPauseButton); transport.Controls.Add(next);
-            Panel transportCenter = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Sidebar }; transportCenter.Controls.Add(transport); transport.Resize += delegate { transport.Left = Math.Max(0, (transportCenter.Width - transport.Width) / 2); };
+            transport.Dock = DockStyle.None; transport.Size = new Size(150, 50);
+            Panel transportCenter = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Sidebar }; transportCenter.Controls.Add(transport); transportCenter.Resize += delegate { transport.Location = new Point(Math.Max(0, (transportCenter.Width - transport.Width) / 2), 0); };
             center.Controls.Add(transportCenter, 0, 0); center.SetColumnSpan(transportCenter, 3);
             elapsedLabel = TimeLabel("0:00", ContentAlignment.MiddleRight);
             durationLabel = TimeLabel("0:00", ContentAlignment.MiddleLeft);
@@ -301,7 +305,8 @@ namespace YTMusicLite.Client
             stack.Controls.Add(SettingsCard("Playback", "Browser-free audio", "Audio runs through mpv. The YouTube resolver starts only when a song is opened and exits immediately afterward."));
             stack.Controls.Add(SettingsCard("Memory", "Low-memory by design", "Artwork is loaded on demand, the in-memory cache is bounded, and playback buffers are capped."));
             SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
-            PillButton check = new PillButton { Label = "Check for updates", Width = 152, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };
+            update.Height = 178;
+            PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 122 };
             check.Click += async delegate { await CheckForUpdatesAsync(); };
             update.Controls.Add(check);
             stack.Controls.Add(update);

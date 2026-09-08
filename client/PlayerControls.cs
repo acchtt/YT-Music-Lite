@@ -80,16 +80,7 @@ namespace YTMusicLite.Client
         protected override void OnPaint(PaintEventArgs e)
         {
             Theme.EnableQuality(e.Graphics);
-            Rectangle mark = new Rectangle(18, 17, 38, 38);
-            using (SolidBrush brush = new SolidBrush(Theme.Accent)) using (GraphicsPath path = Theme.Rounded(mark, 12)) e.Graphics.FillPath(brush, path);
-            using (Pen line = new Pen(Color.White, 3))
-            {
-                line.StartCap = LineCap.Round;
-                line.EndCap = LineCap.Round;
-                e.Graphics.DrawLine(line, 29, 39, 29, 29);
-                e.Graphics.DrawLine(line, 37, 43, 37, 25);
-                e.Graphics.DrawLine(line, 45, 37, 45, 31);
-            }
+            Branding.DrawMark(e.Graphics, new RectangleF(18, 17, 38, 38));
             using (Font title = new Font("Segoe UI", 11, FontStyle.Bold)) TextRenderer.DrawText(e.Graphics, "YT MUSIC", title, new Rectangle(68, 13, Width - 76, 28), Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             using (Font lite = new Font("Segoe UI", 8, FontStyle.Bold)) TextRenderer.DrawText(e.Graphics, "LITE", lite, new Rectangle(69, 39, Width - 76, 18), Theme.Accent, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
         }

@@ -60,7 +60,9 @@ namespace YTMusicLite.Client
                 {
                     if (memory.Count >= MemoryLimit)
                     {
-                        foreach (KeyValuePair<string, Image> item in memory) { item.Value.Dispose(); memory.Remove(item.Key); break; }
+                        string removeKey = null;
+                        foreach (KeyValuePair<string, Image> item in memory) { removeKey = item.Key; break; }
+                        if (removeKey != null) { memory[removeKey].Dispose(); memory.Remove(removeKey); }
                     }
                     memory[url] = image;
                 }
