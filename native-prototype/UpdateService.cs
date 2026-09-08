@@ -13,7 +13,7 @@ namespace YTMusicLiteNative
 {
     public sealed class UpdateService
     {
-        public const string CurrentVersion = "5.0.0";
+        public const string CurrentVersion = "5.1.0";
         public const string RepositoryOwner = "acchtt";
         public const string RepositoryName = "YT-Music-Lite";
         public const string ReleaseTagPrefix = "ytmlite-v";
