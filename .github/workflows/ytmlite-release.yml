@@ -21,53 +21,55 @@ jobs:
 
       - name: Build YT Music Lite
         shell: pwsh
-        run: .\yt-music-lite\build.ps1
+        run: .\native-prototype\build.ps1
 
-      - name: Main, official player and settings smoke test
+      - name: Install and stage native playback tools
         shell: pwsh
         run: |
-          $Root = Resolve-Path .\yt-music-lite
-          $Build = Join-Path $Root "build"
-          $Csc = @(
-            "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
-            "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
-          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $Csc) { throw "C# compiler not found" }
-          & $Csc /nologo /target:exe /platform:x64 /langversion:5 `
-            /out:"$Build\YTMusicLite.SmokeTest.exe" `
-            /reference:System.dll `
-            /reference:System.Core.dll `
-            /reference:Accessibility.dll /reference:System.Drawing.dll `
-            /reference:System.Windows.Forms.dll `
-            /reference:"$Build\YTMusicLite.exe" `
-            (Join-Path $Root "SmokeTest.cs")
-          if ($LASTEXITCODE -ne 0) { throw "Smoke test compilation failed" }
-          Push-Location $Build
+          $Build = Resolve-Path .\native-prototype\build
+          choco install mpv --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'mpv installation failed' }
+          $Mpv = Get-ChildItem 'C:\ProgramData\chocolatey\lib\mpvio.install\tools\mpv.exe' -ErrorAction Stop | Select-Object -First 1
+          Copy-Item $Mpv.FullName (Join-Path $Build 'mpv.exe') -Force
+          Invoke-WebRequest 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile (Join-Path $Build 'yt-dlp.exe')
+          $DenoZip = Join-Path $env:RUNNER_TEMP 'deno.zip'
+          $DenoDir = Join-Path $env:RUNNER_TEMP 'deno'
+          Invoke-WebRequest 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip' -OutFile $DenoZip
+          Expand-Archive $DenoZip $DenoDir -Force
+          Copy-Item (Join-Path $DenoDir 'deno.exe') (Join-Path $Build 'deno.exe') -Force
+          & (Join-Path $Build 'mpv.exe') --version
+          & (Join-Path $Build 'yt-dlp.exe') --version
+          & (Join-Path $Build 'deno.exe') --version
+
+      - name: Playback, memory and interface checks
+        shell: pwsh
+        run: |
+          .\native-prototype\measure.ps1
+          Push-Location .\native-prototype\build
           try {
-            .\YTMusicLite.SmokeTest.exe
-            if ($LASTEXITCODE -ne 0) { throw "Main/official-player/settings smoke test failed" }
-          } finally {
-            Pop-Location
-          }
+            $App = Start-Process .\YTMusicLite.exe -ArgumentList '--ui-check' -PassThru
+            if (-not $App.WaitForExit(30000)) { $App.Kill(); throw 'UI check timed out' }
+            if (-not (Test-Path ui-check.txt) -or (Get-Content ui-check.txt -Raw) -notmatch '^PASS:') { throw 'Native UI check failed' }
+          } finally { Pop-Location }
 
       - name: Package update
         shell: pwsh
-        run: .\yt-music-lite\make-release.ps1
+        run: .\native-prototype\make-release.ps1
 
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v4.2.1
+          tag_name: ytmlite-v5.0.0
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v4.2.1
+          name: YT Music Lite v5.0.0
           body: |
-            YT Music Lite v4.2.1
+            YT Music Lite v5.0.0
 
-            - Replaces the cramped stacked branding with a clean sound-bar mark and readable single-line name.
-            - Groups navigation controls and increases icon size for faster scanning.
-            - Adds a clearly labeled Mini player action with consistent spacing and interaction states.
-            - Updates the executable, title bar, system tray, and fallback artwork with the revised identity.
-            - Preserves keyboard controls, saved mini-player placement, official YouTube Music playback, and verified in-app updates.
+            - Replaces the embedded browser with a native Windows music interface.
+            - Adds Home, Search, Library, Queue, local playlists, audio import, and a native mini player.
+            - Includes mpv, yt-dlp, and Deno so no manual playback-tool installation is required.
+            - Uses on-demand search and stream resolution to keep idle memory low.
+            - Keeps verified in-app updates through Settings.
           files: |
-            yt-music-lite/release/YTMusicLite-v4.2.1-win-x64.zip
-            yt-music-lite/release/YTMusicLite-v4.2.1-win-x64.zip.sha256
+            native-prototype/release/YTMusicLite-v5.0.0-win-x64.zip
+            native-prototype/release/YTMusicLite-v5.0.0-win-x64.zip.sha256

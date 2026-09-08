@@ -1,0 +1,37 @@
+name: Native playback prototype
+on:
+  pull_request:
+    paths: ['native-prototype/**', '.github/workflows/native-prototype.yml']
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install audio test dependency
+        shell: pwsh
+        run: |
+          choco install mpv --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'mpv installation failed' }
+          'C:\ProgramData\chocolatey\lib\mpvio.install\tools' | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Build and measure real native playback
+        shell: pwsh
+        run: ./native-prototype/measure.ps1
+      - name: Check native music navigation
+        shell: pwsh
+        run: |
+          Push-Location native-prototype/build
+          $app = Start-Process ./YTMusicLite.exe -ArgumentList '--ui-check' -PassThru
+          if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'UI check timed out' }
+          if (-not (Test-Path ui-check.txt) -or (Get-Content ui-check.txt -Raw) -notmatch '^PASS:') { throw 'Native UI check failed' }
+          Pop-Location
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-playback-prototype
+          path: |
+            native-prototype/build/*.exe
+            native-prototype/build/*.csv
+            native-prototype/build/*.txt
+            native-prototype/build/*.png
