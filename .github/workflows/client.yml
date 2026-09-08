@@ -1,0 +1,49 @@
+name: Native client
+
+on:
+  pull_request:
+    paths:
+      - 'client/**'
+      - '.github/workflows/client.yml'
+      - '.github/workflows/ytmlite-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install playback test dependency
+        shell: pwsh
+        run: |
+          choco install mpv --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'mpv installation failed' }
+          'C:\ProgramData\chocolatey\lib\mpvio.install\tools' | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Compile and measure native client
+        shell: pwsh
+        run: .\client\measure.ps1
+
+      - name: Validate complete interface
+        shell: pwsh
+        run: |
+          Push-Location .\client\build
+          try {
+            $App = Start-Process .\YTMusicLite.exe -ArgumentList '--ui-check' -PassThru
+            if (-not $App.WaitForExit(30000)) { $App.Kill(); throw 'UI check timed out' }
+            if (-not (Test-Path ui-check.txt) -or (Get-Content ui-check.txt -Raw) -notmatch '^PASS:') { throw "Client UI check failed: $(Get-Content ui-check.txt -Raw)" }
+          } finally { Pop-Location }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-client-validation
+          path: |
+            client/build/*.exe
+            client/build/*.csv
+            client/build/*.txt
+            client/build/*.png
+
