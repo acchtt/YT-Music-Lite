@@ -88,7 +88,12 @@ internal sealed partial class NativePlayer
 
     void ResizeTrackColumns()
     {
-        if (tracks == null || tracks.Columns.Count < 4) return; int available = Math.Max(476, tracks.ClientSize.Width - 30);
+        if (tracks == null || tracks.Columns.Count < 4) return;
+        if (tracks.ClientSize.Width < 650)
+        {
+            int compact = Math.Max(410, tracks.ClientSize.Width - 55); tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(235, (compact - 42) * 60 / 100); tracks.Columns[2].Width = Math.Max(130, compact - tracks.Columns[0].Width - tracks.Columns[1].Width); tracks.Columns[3].Width = 0; return;
+        }
+        int available = tracks.ClientSize.Width - 30;
         tracks.Columns[0].Width = 42; tracks.Columns[1].Width = Math.Max(200, (available - 42) * 45 / 100); tracks.Columns[2].Width = Math.Max(130, (available - 42) * 31 / 100); tracks.Columns[3].Width = Math.Max(100, available - tracks.Columns[0].Width - tracks.Columns[1].Width - tracks.Columns[2].Width);
     }
 
