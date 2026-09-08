@@ -58,10 +58,21 @@ internal class MusicButton : Button
 
 internal sealed class NavButton : MusicButton
 {
-    public NavButton() { Width = 194; Height = 42; Radius = 7; LeftAligned = true; Font = new Font("Segoe UI", 10, FontStyle.Bold); ForeColor = MusicTheme.Muted; }
+    public NavButton() { Width = 172; Height = 42; Radius = 7; LeftAligned = true; Font = new Font("Segoe UI", 10, FontStyle.Bold); ForeColor = MusicTheme.Muted; }
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e); using (var brush = new SolidBrush(Selected ? MusicTheme.Accent : Color.Transparent)) e.Graphics.FillEllipse(brush, 13, Height / 2 - 3, 6, 6);
+    }
+}
+
+internal class RoundPanel : Panel
+{
+    public int Radius { get; set; }
+    public RoundPanel() { Radius = 20; }
+    protected override void OnResize(EventArgs eventargs)
+    {
+        base.OnResize(eventargs); if (Width < 2 || Height < 2) return;
+        using (var path = MusicTheme.Rounded(new Rectangle(0, 0, Width - 1, Height - 1), Math.Min(Radius, Math.Min(Width, Height) / 2))) Region = new Region(path);
     }
 }
 
@@ -102,11 +113,11 @@ internal sealed class MusicListView : ListView
     }
 }
 
-internal sealed class QuickCard : Panel
+internal sealed class QuickCard : RoundPanel
 {
     public QuickCard(string text, EventHandler click)
     {
-        Width = 205; Height = 68; Margin = new Padding(0, 0, 12, 12); BackColor = MusicTheme.Raised; Cursor = Cursors.Hand;
+        Width = 205; Height = 68; Radius = 7; Margin = new Padding(0, 0, 12, 12); BackColor = MusicTheme.Raised; Cursor = Cursors.Hand;
         var art = new ArtworkBox { Dock = DockStyle.Left, Width = 68, KeyText = text }; var title = new Label { Dock = DockStyle.Fill, Text = text, ForeColor = MusicTheme.Text, Font = new Font("Segoe UI", 9, FontStyle.Bold), Padding = new Padding(12, 0, 8, 0), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         Controls.Add(title); Controls.Add(art); foreach (Control c in Controls) c.Click += click; Click += click;
     }

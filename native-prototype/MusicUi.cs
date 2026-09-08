@@ -4,12 +4,15 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 internal sealed partial class NativePlayer
 {
+    const int EmSetCueBanner = 0x1501;
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr handle, int message, IntPtr showWhenFocused, string text);
     public sealed class Track { public string Title { get; set; } public string Artist { get; set; } public string Source { get; set; } }
     public sealed class Collection { public List<Track> Tracks = new List<Track>(); public Dictionary<string, List<Track>> Playlists = new Dictionary<string, List<Track>>(); }
     readonly Color background = MusicTheme.Canvas, surface = MusicTheme.Raised, accent = MusicTheme.Accent;
@@ -63,9 +66,9 @@ internal sealed partial class NativePlayer
 
         var top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = MusicTheme.Canvas };
         top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
-        var searchShell = new Panel { Dock = DockStyle.Left, Width = 430, Height = 40, Margin = new Padding(0, 8, 0, 8), BackColor = Color.White, Padding = new Padding(17, 10, 12, 7) };
+        var searchShell = new RoundPanel { Dock = DockStyle.Left, Width = 430, Height = 40, Radius = 20, Margin = new Padding(0, 8, 0, 8), BackColor = Color.White, Padding = new Padding(17, 10, 12, 7) };
         search = new TextBox { Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, BackColor = Color.White, ForeColor = Color.FromArgb(25, 25, 25), Font = new Font("Segoe UI", 10), AccessibleName = "Search songs or artists" };
-        search.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(); } }; searchShell.Controls.Add(search);
+        search.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(); } }; searchShell.Controls.Add(search); SendMessage(search.Handle, EmSetCueBanner, IntPtr.Zero, "What do you want to play?");
         var searchButton = new MusicButton { Text = "Search", Dock = DockStyle.Fill, Margin = new Padding(8), BackColor = MusicTheme.Raised, AccessibleName = "Search" }; searchButton.Click += async delegate { await SearchAsync(); };
         top.Controls.Add(searchShell, 0, 0); top.Controls.Add(searchButton, 1, 0);
 
@@ -75,10 +78,17 @@ internal sealed partial class NativePlayer
         actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, BackColor = MusicTheme.Canvas, Padding = new Padding(0, 5, 0, 0) };
         tracks = new MusicListView { Dock = DockStyle.Fill, AccessibleName = "Tracks" };
         tracks.Columns.Add("#", 46); tracks.Columns.Add("Title", 370); tracks.Columns.Add("Artist", 235); tracks.Columns.Add("Source", 175);
+        tracks.Resize += delegate { ResizeTrackColumns(); };
         tracks.DoubleClick += async delegate { await PlaySelected(); }; tracks.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await PlaySelected(); } };
         body.Controls.Add(top, 0, 0); body.Controls.Add(heading, 0, 1); body.Controls.Add(subtitle, 0, 2); body.Controls.Add(quickCards, 0, 3); body.Controls.Add(actions, 0, 4); body.Controls.Add(tracks, 0, 5); root.Controls.Add(body, 1, 0);
 
         root.Controls.Add(BuildPlayerBar(), 0, 1); root.SetColumnSpan(root.GetControlFromPosition(0, 1), 2); Controls.Add(root); RefreshNavigation(); ShowPage("Home", null);
+    }
+
+    void ResizeTrackColumns()
+    {
+        if (tracks == null || tracks.Columns.Count < 4) return; int available = Math.Max(540, tracks.ClientSize.Width - 6);
+        tracks.Columns[0].Width = 46; tracks.Columns[1].Width = Math.Max(230, (available - 46) * 45 / 100); tracks.Columns[2].Width = Math.Max(155, (available - 46) * 31 / 100); tracks.Columns[3].Width = Math.Max(105, available - tracks.Columns[0].Width - tracks.Columns[1].Width - tracks.Columns[2].Width);
     }
 
     Control BuildPlayerBar()
@@ -105,7 +115,7 @@ internal sealed partial class NativePlayer
     void RefreshNavigation()
     {
         foreach (Control c in navigation.Controls.Cast<Control>().ToArray()) c.Dispose(); navButtons.Clear(); AddNav("Home"); AddNav("Search"); AddNav("Library"); AddNav("Queue"); AddNav("Settings");
-        navigation.Controls.Add(new Label { Text = "YOUR PLAYLISTS", Width = 194, Height = 38, Padding = new Padding(12, 14, 0, 0), ForeColor = MusicTheme.Muted, Font = new Font("Segoe UI", 8, FontStyle.Bold) });
+        navigation.Controls.Add(new Label { Text = "YOUR PLAYLISTS", Width = 172, Height = 38, Padding = new Padding(12, 14, 0, 0), ForeColor = MusicTheme.Muted, Font = new Font("Segoe UI", 8, FontStyle.Bold) });
         var create = new NavButton { Text = "+  Create playlist", Font = new Font("Segoe UI", 9, FontStyle.Bold), AccessibleName = "Create playlist" }; create.Click += delegate { CreatePlaylist(); }; navigation.Controls.Add(create);
         foreach (string name in library.Playlists.Keys.OrderBy(x => x)) { string target = name; var button = new NavButton { Text = target, Font = new Font("Segoe UI", 9), AccessibleName = "Playlist " + target }; button.Click += delegate { ShowPage("Playlist", target); }; navigation.Controls.Add(button); navButtons["Playlist:" + target] = button; }
     }
@@ -200,7 +210,7 @@ internal sealed partial class NativePlayer
             var track = new Track { Title = "Midnight Drive", Artist = "Sample artist", Source = "sample.wav" }; library.Tracks.Add(track); library.Playlists.Add("Night Mix", new List<Track> { track }); RefreshNavigation();
             ShowPage("Library", null); if (tracks.Items.Count != 1) throw new Exception("Library navigation failed"); ShowPage("Playlist", "Night Mix"); if (tracks.Items.Count != 1 || heading.Text != "Night Mix") throw new Exception("Playlist navigation failed");
             queue.Add(track); queue.Add(track); queueIndex = 1; ShowPage("Queue", null); tracks.Items[0].Selected = true; RemoveSelected(); if (queue.Count != 1 || queueIndex != 0) throw new Exception("Queue removal failed");
-            ShowPage("Search", null); if (tracks.Items.Count != 0) throw new Exception("Search state leaked tracks"); ShowPage("Settings", null); if (actions.Controls.Count != 1 || !subtitle.Text.Contains(YTMusicLiteNative.UpdateService.CurrentVersion)) throw new Exception("Settings failed"); ShowPage("Home", null); ShowMini(); if (mini == null) throw new Exception("Mini player failed"); mini.Close();
+            ShowPage("Search", null); if (tracks.Items.Count != 0) throw new Exception("Search state leaked tracks"); ShowPage("Settings", null); if (actions.Controls.Count != 1 || !subtitle.Text.Contains(YTMusicLiteNative.UpdateService.CurrentVersion)) throw new Exception("Settings failed"); ShowPage("Home", null); ShowMini(); if (mini == null) throw new Exception("Mini player failed"); using (var bitmap = new Bitmap(mini.Width, mini.Height)) { mini.DrawToBitmap(bitmap, new Rectangle(Point.Empty, mini.Size)); bitmap.Save("spotify-mini.png"); } mini.Close();
             using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("spotify-home.png"); } Size = MinimumSize; using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("spotify-compact.png"); }
             File.WriteAllText("ui-check.txt", "PASS: Spotify-style layout, navigation, playlists, queue, search, settings, mini player");
         }
