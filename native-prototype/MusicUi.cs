@@ -34,7 +34,7 @@ internal sealed partial class NativePlayer
     }
     void BuildMusicUi()
     {
-        Text = "YT Music Lite — Native"; Size = new Size(1060, 720); MinimumSize = new Size(860, 600);
+        Text = "YT Music Lite"; Size = new Size(1060, 720); MinimumSize = new Size(860, 600);
         Font = new Font("Segoe UI", 10); BackColor = background; ForeColor = Color.White; StartPosition = FormStartPosition.CenterScreen;
         try { if (!benchmark && File.Exists(libraryPath)) library = new JavaScriptSerializer().Deserialize<Collection>(File.ReadAllText(libraryPath)) ?? new Collection(); }
         catch (Exception) { status.Text = "Your saved library could not be read. The original file is preserved."; }
@@ -79,12 +79,13 @@ internal sealed partial class NativePlayer
     {
         foreach (Control c in navigation.Controls.Cast<Control>().ToArray()) c.Dispose();
         navigation.Controls.Add(new Label { Text = "YT MUSIC\nLITE", Height = 76, Width = 160, ForeColor = accent, Font = new Font("Segoe UI", 18, FontStyle.Bold) });
-        foreach (string name in new[] { "Home", "Search", "Library", "Queue" }) { string target = name; var b = UiButton(target, delegate { ShowPage(target, null); }); b.Width = 155; navigation.Controls.Add(b); }
+        foreach (string name in new[] { "Home", "Search", "Library", "Queue", "Settings" }) { string target = name; var b = UiButton(target, delegate { ShowPage(target, null); }); b.Width = 155; navigation.Controls.Add(b); }
         navigation.Controls.Add(UiButton("+ New playlist", CreatePlaylist));
         foreach (string name in library.Playlists.Keys.OrderBy(x => x)) { string target = name; var b = UiButton(target, delegate { ShowPage("Playlist", target); }); b.Width = 155; navigation.Controls.Add(b); }
     }
     List<Track> VisibleTracks()
     {
+        if (page == "Settings") return new List<Track>();
         if (page == "Search") return results;
         if (page == "Queue") return queue;
         if (page == "Playlist") return library.Playlists[playlistName];
@@ -94,6 +95,13 @@ internal sealed partial class NativePlayer
     {
         page = name; playlistName = selectedPlaylist; heading.Text = name == "Playlist" ? selectedPlaylist : name;
         foreach (Control c in actions.Controls.Cast<Control>().ToArray()) c.Dispose();
+        if (name == "Settings")
+        {
+            actions.Controls.Add(UiButton("Check for updates", async delegate { await CheckUpdatesAsync(); }));
+            RenderTracks();
+            subtitle.Text = "YT Music Lite " + YTMusicLiteNative.UpdateService.CurrentVersion + " · Browser-free Windows audio player";
+            return;
+        }
         actions.Controls.Add(UiButton("Play selected", async delegate { await PlaySelected(); }));
         actions.Controls.Add(UiButton("Add to queue", delegate { var t = Selected(); if (t != null) { queue.Add(t); status.Text = "Added to queue"; if (page == "Queue") RenderTracks(); } }));
         actions.Controls.Add(UiButton("Save to library", delegate { var t = Selected(); if (t != null) { if (!library.Tracks.Any(x => x.Source == t.Source)) library.Tracks.Add(t); SaveLibrary(); } }));
@@ -150,7 +158,8 @@ internal sealed partial class NativePlayer
         Process process = null;
         try {
             string query = search.Text.Trim(); ShowPage("Search", null); subtitle.Text = "Searching…";
-            process = Start(FindTool("yt-dlp"), "--ignore-config --flat-playlist --dump-json --no-warnings --socket-timeout 15 --retries 1 -- " + Quote("ytsearch20:" + query), true); searchProcess = process;
+            string deno = FindTool("deno");
+            process = Start(FindTool("yt-dlp"), "--ignore-config --js-runtimes " + Quote("deno:" + deno) + " --flat-playlist --dump-json --no-warnings --socket-timeout 15 --retries 1 -- " + Quote("ytsearch20:" + query), true); searchProcess = process;
             var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync(); var exited = Task.Run(delegate { process.WaitForExit(); });
             if (await Task.WhenAny(exited, Task.Delay(45000)) != exited) { KillTree(process); throw new TimeoutException("Search timed out. Try again."); }
             await exited; string json = await output; string errors = await error; if (closing) return;
@@ -176,11 +185,12 @@ internal sealed partial class NativePlayer
             queue.Add(track); queue.Add(track); queueIndex = 1; ShowPage("Queue", null); tracks.Items[0].Selected = true; RemoveSelected();
             if (queue.Count != 1 || queueIndex != 0) throw new Exception("Queue removal did not preserve active position");
             ShowPage("Search", null); if (tracks.Items.Count != 0) throw new Exception("Search state leaked library tracks");
+            ShowPage("Settings", null); if (actions.Controls.Count != 1 || !subtitle.Text.Contains(YTMusicLiteNative.UpdateService.CurrentVersion)) throw new Exception("Settings/update page failed");
             ShowPage("Home", null); ShowMini(); if (mini == null) throw new Exception("Mini player failed"); mini.Close();
             using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("native-home.png"); }
             Size = MinimumSize;
             using (var bitmap = new Bitmap(Width, Height)) { DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size)); bitmap.Save("native-compact.png"); }
-            File.WriteAllText("ui-check.txt", "PASS: navigation, playlist display, queue removal, search isolation, mini player");
+            File.WriteAllText("ui-check.txt", "PASS: navigation, playlist display, queue removal, search isolation, settings updater, mini player");
         } catch (Exception e) { File.WriteAllText("ui-check.txt", "FAIL: " + e); Environment.ExitCode = 1; }
         Close();
     }
@@ -191,5 +201,23 @@ internal sealed partial class NativePlayer
         var title = new Label { Dock = DockStyle.Top, Height = 40, Text = nowPlaying.Text, AutoEllipsis = true, Padding = new Padding(10) }; EventHandler update = delegate { title.Text = nowPlaying.Text; }; nowPlaying.TextChanged += update;
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8) }; buttons.Controls.Add(UiButton("Pause / resume", delegate { pause.PerformClick(); })); buttons.Controls.Add(UiButton("Next", async delegate { await MoveQueue(1); })); buttons.Controls.Add(UiButton("Stop", delegate { stop.PerformClick(); }));
         mini.Controls.Add(buttons); mini.Controls.Add(title); mini.FormClosed += delegate { nowPlaying.TextChanged -= update; mini = null; }; mini.Show(this);
+    }
+    async Task CheckUpdatesAsync()
+    {
+        try
+        {
+            status.Text = "Checking for updates…";
+            var service = new YTMusicLiteNative.UpdateService();
+            var update = await service.CheckAsync();
+            if (!update.UpdateAvailable) { status.Text = update.Message; return; }
+            if (MessageBox.Show(this, update.Message + "\n\nDownload and install it now?", "YT Music Lite update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) { status.Text = "Update available"; return; }
+            status.Text = "Downloading update…";
+            var progress = new Progress<int>(delegate(int percent) { status.Text = "Downloading update… " + percent + "%"; });
+            var prepared = await service.PrepareAsync(update, progress);
+            status.Text = "Restarting to install " + update.Version + "…";
+            service.InstallPrepared(prepared);
+            Close();
+        }
+        catch (Exception e) { status.Text = "Update failed: " + e.Message; }
     }
 }

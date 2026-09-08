@@ -81,7 +81,7 @@ internal sealed partial class NativePlayer : Form
             try { string path = Path.Combine(dir.Trim('"'), name + ".exe"); if (File.Exists(path)) return path; }
             catch (ArgumentException) { }
         }
-        throw new InvalidOperationException("Install " + name + " or place its executable beside this app. See the prototype README.");
+        throw new InvalidOperationException(name + " is missing. Reinstall YT Music Lite, then try again.");
     }
 
     // Windows CommandLineToArgvW escaping; no shell is used for supplied URLs or paths.
@@ -104,6 +104,8 @@ internal sealed partial class NativePlayer : Form
             UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardInput = !output, RedirectStandardOutput = output, RedirectStandardError = output
         }};
+        string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        process.StartInfo.EnvironmentVariables["PATH"] = appDirectory + ";" + (Environment.GetEnvironmentVariable("PATH") ?? "");
         process.Start(); return process;
     }
 
@@ -121,7 +123,8 @@ internal sealed partial class NativePlayer : Form
                     !(uri.Host == "youtu.be" || uri.Host == "youtube.com" || uri.Host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidOperationException("Enter an HTTPS YouTube link or an existing audio file.");
                 status.Text = "Resolving audio…";
-                var process = Start(FindTool("yt-dlp"), "--ignore-config --no-playlist --no-warnings --socket-timeout 15 --retries 1 -f bestaudio --get-url -- " + Quote(source), true);
+                string deno = FindTool("deno");
+                var process = Start(FindTool("yt-dlp"), "--ignore-config --js-runtimes " + Quote("deno:" + deno) + " --no-playlist --no-warnings --socket-timeout 15 --retries 1 -f bestaudio --get-url -- " + Quote(source), true);
                 resolver = process;
                 var stdout = process.StandardOutput.ReadToEndAsync();
                 var stderr = process.StandardError.ReadToEndAsync();

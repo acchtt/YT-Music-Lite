@@ -17,7 +17,7 @@ if (-not $Source) {
     } finally { $writer.Dispose() }
 }
 Remove-Item "$root/build/benchmark-stages.txt" -ErrorAction SilentlyContinue
-$app = Start-Process "$root/build/YTMusicLite.Native.exe" -ArgumentList @('--benchmark', ('"' + $Source + '"')) -WorkingDirectory "$root/build" -PassThru
+$app = Start-Process "$root/build/YTMusicLite.exe" -ArgumentList @('--benchmark', ('"' + $Source + '"')) -WorkingDirectory "$root/build" -PassThru
 $known = [Collections.Generic.HashSet[int]]::new(); [void]$known.Add($app.Id)
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $rows = @()

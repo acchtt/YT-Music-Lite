@@ -22,7 +22,7 @@ jobs:
         shell: pwsh
         run: |
           Push-Location native-prototype/build
-          $app = Start-Process ./YTMusicLite.Native.exe -ArgumentList '--ui-check' -PassThru
+          $app = Start-Process ./YTMusicLite.exe -ArgumentList '--ui-check' -PassThru
           if (-not $app.WaitForExit(30000)) { $app.Kill(); throw 'UI check timed out' }
           if (-not (Test-Path ui-check.txt) -or (Get-Content ui-check.txt -Raw) -notmatch '^PASS:') { throw 'Native UI check failed' }
           Pop-Location
