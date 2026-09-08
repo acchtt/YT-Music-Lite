@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Brand asset compilation failed' }
 if ($LASTEXITCODE -ne 0) { throw 'Brand asset generation failed' }
 
 $output = Join-Path $nativeBuild 'YTMusicLite.exe'
-& $csc /nologo /target:winexe /platform:x64 /optimize+ /langversion:5 "/win32icon:$(Join-Path $nativeBuild 'YTMusicLite.ico')" /reference:System.dll /reference:System.Core.dll /reference:System.Web.Extensions.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll "/out:$output" (Join-Path $nativeRoot 'NativePlayer.cs') (Join-Path $nativeRoot 'MusicUi.cs') (Join-Path $nativeRoot 'UpdateService.cs')
+& $csc /nologo /target:winexe /platform:x64 /optimize+ /langversion:5 "/win32icon:$(Join-Path $nativeBuild 'YTMusicLite.ico')" /reference:System.dll /reference:System.Core.dll /reference:System.Web.Extensions.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll "/out:$output" (Join-Path $nativeRoot 'NativePlayer.cs') (Join-Path $nativeRoot 'SpotifyControls.cs') (Join-Path $nativeRoot 'MusicUi.cs') (Join-Path $nativeRoot 'UpdateService.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Native app compilation failed' }
 
 $updater = Join-Path $nativeBuild 'YTMusicLite.Updater.exe'
