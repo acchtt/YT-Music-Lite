@@ -61,7 +61,7 @@ internal sealed class NavButton : MusicButton
     public NavButton() { Width = 194; Height = 42; Radius = 7; LeftAligned = true; Font = new Font("Segoe UI", 10, FontStyle.Bold); ForeColor = MusicTheme.Muted; }
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e); using (var brush = new SolidBrush(Selected ? MusicTheme.Accent : Color.Transparent)) e.Graphics.FillEllipse(13, Height / 2 - 3, 6, 6);
+        base.OnPaint(e); using (var brush = new SolidBrush(Selected ? MusicTheme.Accent : Color.Transparent)) e.Graphics.FillEllipse(brush, 13, Height / 2 - 3, 6, 6);
     }
 }
 
