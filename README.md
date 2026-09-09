@@ -7,6 +7,7 @@ YT Music Lite is a browser-free Windows music client focused on low memory use. 
 The production client lives in `client/` and uses only Windows-native controls. It does not host WebView2 or another browser engine.
 
 - `yt-dlp` performs an on-demand YouTube search or resolves one audio URL, then exits.
+- If YouTube challenges anonymous playback, Settings can use cookies from Edge, Chrome, Firefox, or an exported `cookies.txt`; the app stores only that choice/path.
 - `mpv` plays audio with bounded buffers and no video pipeline.
 - Library, recent music, and playlists are stored locally under `%LocalAppData%\YTMusicLite`.
 - Artwork is cached on disk and the decoded in-memory cache is bounded.

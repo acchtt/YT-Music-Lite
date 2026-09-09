@@ -15,6 +15,7 @@ namespace YTMusicLite.Client
     {
         private readonly object gate = new object();
         private readonly JavaScriptSerializer serializer = new JavaScriptSerializer();
+        private readonly ClientSettings settings;
         private Process resolver;
         private Process player;
         private string pipeName;
@@ -31,8 +32,10 @@ namespace YTMusicLite.Client
         public PlaybackState State { get; private set; }
         public Track CurrentTrack { get { return current; } }
 
-        public PlaybackEngine()
+        public PlaybackEngine() : this(new SettingsStore().Load()) { }
+        public PlaybackEngine(ClientSettings clientSettings)
         {
+            settings = clientSettings ?? new ClientSettings();
             State = PlaybackState.Stopped;
             pollTimer = new Timer(Poll, null, Timeout.Infinite, Timeout.Infinite);
         }
@@ -116,7 +119,7 @@ namespace YTMusicLite.Client
         private async Task<string> ResolveAsync(string source, int request)
         {
             string runtime = ProcessTools.Find("deno");
-            string arguments = "--ignore-config --js-runtimes " + ProcessTools.Quote("deno:" + runtime) + " --no-playlist --no-warnings --socket-timeout 15 --retries 1 -f bestaudio --get-url -- " + ProcessTools.Quote(source);
+            string arguments = "--ignore-config --js-runtimes " + ProcessTools.Quote("deno:" + runtime) + YtDlpOptions.Authentication(settings) + " --no-playlist --no-warnings --socket-timeout 15 --retries 1 -f bestaudio --get-url -- " + ProcessTools.Quote(source);
             Process process = ProcessTools.Start(ProcessTools.Find("yt-dlp"), arguments, true);
             lock (gate) resolver = process;
             Task<string> output = process.StandardOutput.ReadToEndAsync();
@@ -133,7 +136,7 @@ namespace YTMusicLite.Client
             string error = await errors;
             lock (gate) if (resolver == process) resolver = null;
             if (request != generation) throw new OperationCanceledException();
-            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(url)) throw new InvalidOperationException("This song could not be prepared. " + Short(error));
+            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(url)) throw new InvalidOperationException("This song could not be prepared. " + YtDlpOptions.ExplainFailure(Short(error), settings));
             process.Dispose();
             return url;
         }

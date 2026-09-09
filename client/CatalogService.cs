@@ -11,13 +11,17 @@ namespace YTMusicLite.Client
     {
         private Process active;
         private readonly JavaScriptSerializer serializer = new JavaScriptSerializer();
+        private readonly ClientSettings settings;
+
+        public CatalogService() : this(new SettingsStore().Load()) { }
+        public CatalogService(ClientSettings clientSettings) { settings = clientSettings ?? new ClientSettings(); }
 
         public async Task<List<Track>> SearchAsync(string query)
         {
             Cancel();
             if (string.IsNullOrWhiteSpace(query)) return new List<Track>();
             string runtime = ProcessTools.Find("deno");
-            string arguments = "--ignore-config --js-runtimes " + ProcessTools.Quote("deno:" + runtime) + " --flat-playlist --dump-json --no-warnings --socket-timeout 15 --retries 1 -- " + ProcessTools.Quote("ytsearch30:" + query.Trim());
+            string arguments = "--ignore-config --js-runtimes " + ProcessTools.Quote("deno:" + runtime) + YtDlpOptions.Authentication(settings) + " --flat-playlist --dump-json --no-warnings --socket-timeout 15 --retries 1 -- " + ProcessTools.Quote("ytsearch30:" + query.Trim());
             Process process = ProcessTools.Start(ProcessTools.Find("yt-dlp"), arguments, true);
             active = process;
             Task<string> output = process.StandardOutput.ReadToEndAsync();
@@ -34,7 +38,7 @@ namespace YTMusicLite.Client
             if (active == process) active = null;
             int exitCode = process.ExitCode;
             process.Dispose();
-            if (exitCode != 0) throw new InvalidOperationException("YouTube search failed. " + Trim(error, 180));
+            if (exitCode != 0) throw new InvalidOperationException("YouTube search failed. " + YtDlpOptions.ExplainFailure(Trim(error, 500), settings));
 
             List<Track> results = new List<Track>();
             foreach (string line in json.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))

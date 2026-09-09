@@ -467,6 +467,39 @@ namespace YTMusicLite.Client
             catch (Exception error) { statusLabel.Text = "Update failed: " + error.Message; }
         }
 
+        private void SetBrowserAccess(string browser)
+        {
+            clientSettings.CookieSource = browser;
+            clientSettings.CookieFile = "";
+            SaveAccessSettings();
+        }
+
+        private void ImportCookies()
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog { Filter = "Netscape cookies file|*.txt|All files|*.*", Title = "Choose exported YouTube cookies" })
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+                clientSettings.CookieSource = "file";
+                clientSettings.CookieFile = dialog.FileName;
+                SaveAccessSettings();
+            }
+        }
+
+        private void ClearAccess()
+        {
+            clientSettings.CookieSource = "none";
+            clientSettings.CookieFile = "";
+            SaveAccessSettings();
+        }
+
+        private void SaveAccessSettings()
+        {
+            if (!automation) settingsStore.Save(clientSettings);
+            if (youtubeAccessTitle != null) youtubeAccessTitle.Text = YtDlpOptions.FriendlyName(clientSettings);
+            if (youtubeAccessBody != null) youtubeAccessBody.Text = clientSettings.CookieSource == "none" ? "Most music works anonymously. If YouTube asks you to confirm you are not a bot, choose a signed-in browser or cookies.txt." : "This sign-in source is used only by the on-demand YouTube resolver. No browser stays open.";
+            statusLabel.Text = clientSettings.CookieSource == "none" ? "YouTube access cleared" : "YouTube access set to " + YtDlpOptions.FriendlyName(clientSettings);
+        }
+
         private void MainKeyDown(object sender, KeyEventArgs e)
         {
             if (e.Control && (e.KeyCode == Keys.L || e.KeyCode == Keys.K)) { searchBox.Focus(); searchBox.SelectAll(); e.SuppressKeyPress = true; }

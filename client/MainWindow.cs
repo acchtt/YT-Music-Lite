@@ -15,6 +15,8 @@ namespace YTMusicLite.Client
         private const int SetCueBanner = 0x1501;
         private readonly LibraryStore store;
         private readonly LibraryData library;
+        private readonly SettingsStore settingsStore;
+        private readonly ClientSettings clientSettings;
         private readonly CatalogService catalog;
         private readonly PlaybackEngine playback;
         private readonly bool automation;
@@ -44,6 +46,8 @@ namespace YTMusicLite.Client
         private RowStyle homeRow;
         private TrackListControl trackList;
         private Panel settingsPanel;
+        private Label youtubeAccessTitle;
+        private Label youtubeAccessBody;
         private ArtworkControl playerArtwork;
         private Label playerTitle;
         private Label playerArtist;
@@ -68,8 +72,10 @@ namespace YTMusicLite.Client
             silentPlayback = automation || !string.IsNullOrEmpty(benchmarkSource) || args.Any(item => string.Equals(item, "--silent", StringComparison.OrdinalIgnoreCase));
             store = new LibraryStore();
             library = automation ? new LibraryData() : store.Load();
-            catalog = new CatalogService();
-            playback = new PlaybackEngine();
+            settingsStore = new SettingsStore();
+            clientSettings = automation ? new ClientSettings() : settingsStore.Load();
+            catalog = new CatalogService(clientSettings);
+            playback = new PlaybackEngine(clientSettings);
             playback.SnapshotChanged += PlaybackSnapshotChanged;
             playback.PlaybackEnded += PlaybackEnded;
             BuildWindow();
@@ -300,12 +306,24 @@ namespace YTMusicLite.Client
         private Panel BuildSettingsPanel()
         {
             Panel panel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Window, Visible = false, AutoScroll = true };
-            FlowLayoutPanel stack = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 420, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Window };
-            stack.Controls.Add(SettingsCard("Playback", "Browser-free audio", "Audio runs through mpv. The YouTube resolver starts only when a song is opened and exits immediately afterward."));
-            stack.Controls.Add(SettingsCard("Memory", "Low-memory by design", "Artwork is loaded on demand, the in-memory cache is bounded, and playback buffers are capped."));
+            FlowLayoutPanel stack = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 425, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Window };
+            SectionCard access = SettingsCard("YouTube access", YtDlpOptions.FriendlyName(clientSettings), "Most music works anonymously. If YouTube asks you to confirm you are not a bot, use cookies from a browser where you are signed in.");
+            access.Height = 150;
+            youtubeAccessTitle = access.Controls.OfType<Label>().ElementAt(1);
+            youtubeAccessBody = access.Controls.OfType<Label>().ElementAt(2);
+            FlowLayoutPanel accessButtons = new FlowLayoutPanel { Left = 14, Top = 110, Width = 670, Height = 38, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Surface };
+            accessButtons.Controls.Add(SettingsButton("Edge", delegate { SetBrowserAccess("edge"); }));
+            accessButtons.Controls.Add(SettingsButton("Chrome", delegate { SetBrowserAccess("chrome"); }));
+            accessButtons.Controls.Add(SettingsButton("Firefox", delegate { SetBrowserAccess("firefox"); }));
+            accessButtons.Controls.Add(SettingsButton("cookies.txt", ImportCookies));
+            accessButtons.Controls.Add(SettingsButton("Clear", ClearAccess));
+            access.Controls.Add(accessButtons);
+            stack.Controls.Add(access);
+            stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
             SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
-            update.Height = 150;
-            PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 105 };
+            update.Height = 145;
+            update.Margin = Padding.Empty;
+            PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 104 };
             check.Click += async delegate { await CheckForUpdatesAsync(); };
             update.Controls.Add(check);
             stack.Controls.Add(update);
@@ -313,12 +331,19 @@ namespace YTMusicLite.Client
             return panel;
         }
 
+        private PillButton SettingsButton(string label, Action action)
+        {
+            PillButton button = new PillButton { Label = label, Width = label == "cookies.txt" ? 112 : 88, Height = 36, Margin = new Padding(4, 0, 4, 0), AccessibleName = label };
+            button.Click += delegate { action(); };
+            return button;
+        }
+
         private SectionCard SettingsCard(string eyebrow, string title, string body)
         {
-            SectionCard card = new SectionCard { Width = 700, Height = 120, Margin = new Padding(0, 0, 0, 12) };
+            SectionCard card = new SectionCard { Width = 700, Height = 106, Margin = new Padding(0, 0, 0, 12) };
             Label eyebrowLabel = new Label { Text = eyebrow.ToUpperInvariant(), ForeColor = Theme.Accent, Font = new Font("Segoe UI", 8, FontStyle.Bold), AutoSize = false, Left = 18, Top = 15, Width = 650, Height = 18 };
             Label titleLabel = new Label { Text = title, ForeColor = Theme.Text, Font = new Font("Segoe UI", 12, FontStyle.Bold), AutoSize = false, Left = 18, Top = 38, Width = 650, Height = 28 };
-            Label bodyLabel = new Label { Text = body, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 9), AutoSize = false, Left = 18, Top = 69, Width = 650, Height = 36 };
+            Label bodyLabel = new Label { Text = body, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 9), AutoSize = false, Left = 18, Top = 69, Width = 650, Height = 32 };
             card.Controls.Add(eyebrowLabel); card.Controls.Add(titleLabel); card.Controls.Add(bodyLabel);
             return card;
         }
