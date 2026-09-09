@@ -55,7 +55,7 @@ namespace YTMusicLite.Client
                 if (string.IsNullOrWhiteSpace(settings.CookieFile) || !File.Exists(settings.CookieFile)) return "";
                 return " --cookies " + ProcessTools.Quote(settings.CookieFile);
             }
-            if (settings.CookieSource == "edge" || settings.CookieSource == "chrome" || settings.CookieSource == "firefox") return " --cookies-from-browser " + settings.CookieSource;
+            if (settings.CookieSource == "edge" || settings.CookieSource == "brave" || settings.CookieSource == "chrome" || settings.CookieSource == "firefox") return " --cookies-from-browser " + settings.CookieSource;
             return "";
         }
 
@@ -71,7 +71,7 @@ namespace YTMusicLite.Client
             string value = (error ?? "").Trim();
             if (value.IndexOf("not a bot", StringComparison.OrdinalIgnoreCase) >= 0 || value.IndexOf("cookies", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                if (settings == null || settings.CookieSource == "none") return "YouTube requested sign-in. Open Settings and choose Edge, Chrome, Firefox, or a cookies.txt file.";
+                if (settings == null || settings.CookieSource == "none") return "YouTube requested sign-in. Open Settings and choose Edge, Brave, Chrome, Firefox, or a cookies.txt file.";
                 return "YouTube rejected the selected sign-in. Refresh its cookies in Settings, then try again.";
             }
             return value;

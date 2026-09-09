@@ -51,6 +51,12 @@ namespace YTMusicLite.Client
                 Add(candidates, programFiles, "Microsoft", "Edge", "Application", "msedge.exe");
                 Add(candidates, local, "Microsoft", "Edge", "Application", "msedge.exe");
             }
+            else if (string.Equals(browser, "brave", StringComparison.OrdinalIgnoreCase))
+            {
+                Add(candidates, programFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe");
+                Add(candidates, programFilesX86, "BraveSoftware", "Brave-Browser", "Application", "brave.exe");
+                Add(candidates, local, "BraveSoftware", "Brave-Browser", "Application", "brave.exe");
+            }
             else if (string.Equals(browser, "chrome", StringComparison.OrdinalIgnoreCase))
             {
                 Add(candidates, programFiles, "Google", "Chrome", "Application", "chrome.exe");
@@ -77,6 +83,7 @@ namespace YTMusicLite.Client
         private static string DisplayName(string browser)
         {
             if (string.Equals(browser, "edge", StringComparison.OrdinalIgnoreCase)) return "Microsoft Edge";
+            if (string.Equals(browser, "brave", StringComparison.OrdinalIgnoreCase)) return "Brave";
             if (string.Equals(browser, "chrome", StringComparison.OrdinalIgnoreCase)) return "Google Chrome";
             if (string.Equals(browser, "firefox", StringComparison.OrdinalIgnoreCase)) return "Firefox";
             return "the selected browser";
