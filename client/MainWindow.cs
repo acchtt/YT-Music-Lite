@@ -306,12 +306,12 @@ namespace YTMusicLite.Client
         private Panel BuildSettingsPanel()
         {
             Panel panel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Window, Visible = false, AutoScroll = true };
-            FlowLayoutPanel stack = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 425, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Window };
+            FlowLayoutPanel stack = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 392, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Window };
             SectionCard access = SettingsCard("YouTube access", YtDlpOptions.FriendlyName(clientSettings), "Most music works anonymously. If YouTube asks you to confirm you are not a bot, use cookies from a browser where you are signed in.");
-            access.Height = 150;
+            access.Height = 142;
             youtubeAccessTitle = access.Controls.OfType<Label>().ElementAt(1);
             youtubeAccessBody = access.Controls.OfType<Label>().ElementAt(2);
-            FlowLayoutPanel accessButtons = new FlowLayoutPanel { Left = 14, Top = 110, Width = 670, Height = 38, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Surface };
+            FlowLayoutPanel accessButtons = new FlowLayoutPanel { Left = 14, Top = 102, Width = 670, Height = 38, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Surface };
             accessButtons.Controls.Add(SettingsButton("Edge", delegate { SetBrowserAccess("edge"); }));
             accessButtons.Controls.Add(SettingsButton("Chrome", delegate { SetBrowserAccess("chrome"); }));
             accessButtons.Controls.Add(SettingsButton("Firefox", delegate { SetBrowserAccess("firefox"); }));
@@ -321,9 +321,9 @@ namespace YTMusicLite.Client
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
             SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
-            update.Height = 145;
+            update.Height = 130;
             update.Margin = Padding.Empty;
-            PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 104 };
+            PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };
             check.Click += async delegate { await CheckForUpdatesAsync(); };
             update.Controls.Add(check);
             stack.Controls.Add(update);
@@ -340,10 +340,10 @@ namespace YTMusicLite.Client
 
         private SectionCard SettingsCard(string eyebrow, string title, string body)
         {
-            SectionCard card = new SectionCard { Width = 700, Height = 106, Margin = new Padding(0, 0, 0, 12) };
+            SectionCard card = new SectionCard { Width = 700, Height = 96, Margin = new Padding(0, 0, 0, 12) };
             Label eyebrowLabel = new Label { Text = eyebrow.ToUpperInvariant(), ForeColor = Theme.Accent, Font = new Font("Segoe UI", 8, FontStyle.Bold), AutoSize = false, Left = 18, Top = 15, Width = 650, Height = 18 };
             Label titleLabel = new Label { Text = title, ForeColor = Theme.Text, Font = new Font("Segoe UI", 12, FontStyle.Bold), AutoSize = false, Left = 18, Top = 38, Width = 650, Height = 28 };
-            Label bodyLabel = new Label { Text = body, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 9), AutoSize = false, Left = 18, Top = 69, Width = 650, Height = 32 };
+            Label bodyLabel = new Label { Text = body, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 9), AutoSize = false, Left = 18, Top = 69, Width = 650, Height = 24 };
             card.Controls.Add(eyebrowLabel); card.Controls.Add(titleLabel); card.Controls.Add(bodyLabel);
             return card;
         }
