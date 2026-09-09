@@ -49,7 +49,14 @@ try {
     $totals = $rows | Group-Object Seconds | ForEach-Object { [pscustomobject]@{ Seconds = [double]$_.Name; WorkingSetMiB = ($_.Group | Measure-Object WorkingSetMiB -Sum).Sum; PrivateMiB = ($_.Group | Measure-Object PrivateMiB -Sum).Sum } }
     $totals | Export-Csv "$root/build/memory-totals.csv" -NoTypeInformation
     $peak = ($totals | Measure-Object WorkingSetMiB -Maximum).Maximum
+    $idlePeak = ($totals | Where-Object { $_.Seconds -lt 1.5 } | Measure-Object WorkingSetMiB -Maximum).Maximum
+    $releasedPeak = ($totals | Where-Object { $_.Seconds -gt 10 } | Measure-Object WorkingSetMiB -Maximum).Maximum
+    if ($peak -gt 140) { throw "Combined client and player memory exceeded 140 MiB: $peak MiB" }
+    if ($idlePeak -gt 80) { throw "Idle client memory exceeded 80 MiB: $idlePeak MiB" }
+    if ($releasedPeak -gt 80) { throw "Memory after Stop exceeded 80 MiB: $releasedPeak MiB" }
     Write-Host "Peak combined working set: $peak MiB" -ForegroundColor Green
+    Write-Host "Idle client working set: $idlePeak MiB" -ForegroundColor Green
+    Write-Host "Working set after Stop: $releasedPeak MiB" -ForegroundColor Green
 } finally {
     if (-not $app.HasExited) { & taskkill /PID $app.Id /T /F | Out-Null }
 }
