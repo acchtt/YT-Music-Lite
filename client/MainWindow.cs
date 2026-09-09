@@ -307,7 +307,7 @@ namespace YTMusicLite.Client
         {
             Panel panel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Window, Visible = false, AutoScroll = true };
             FlowLayoutPanel stack = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 392, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Window };
-            SectionCard access = SettingsCard("YouTube sign-in", YtDlpOptions.FriendlyName(clientSettings), clientSettings.CookieSource == "none" ? "Choose a browser below. YT Music Lite will open a separate YouTube Music sign-in window." : "Signed in through " + YtDlpOptions.FriendlyName(clientSettings) + ". Close that browser before playback so its session can be read.");
+            SectionCard access = SettingsCard("YouTube sign-in", YtDlpOptions.FriendlyName(clientSettings), clientSettings.CookieSource == "none" ? "Choose a browser below. YT Music Lite will open a separate YouTube Music sign-in window." : (clientSettings.AccessVerified ? "The authenticated session has been verified and is ready for playback." : "This browser session has not been verified yet. Sign in again to complete verification."));
             access.Height = 142;
             youtubeAccessTitle = access.Controls.OfType<Label>().ElementAt(1);
             youtubeAccessBody = access.Controls.OfType<Label>().ElementAt(2);
@@ -321,7 +321,7 @@ namespace YTMusicLite.Client
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.2", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.3", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };
