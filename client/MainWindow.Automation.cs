@@ -35,6 +35,9 @@ namespace YTMusicLite.Client
                 Assert(settingsPanel.Visible && !trackList.Visible, "Settings page");
                 clientSettings.CookieSource = "edge";
                 Assert(YtDlpOptions.Authentication(clientSettings).Contains("--cookies-from-browser edge"), "Browser authentication arguments");
+                clientSettings.CookieSource = "brave";
+                Assert(YtDlpOptions.Authentication(clientSettings).Contains("--cookies-from-browser brave"), "Brave authentication arguments");
+                Assert(BrowserSignIn.Arguments("brave").Contains("--new-window") && BrowserSignIn.Arguments("brave").Contains("accounts.google.com"), "Brave sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("edge").Contains("--new-window") && BrowserSignIn.Arguments("edge").Contains("accounts.google.com"), "Edge sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("firefox").Contains("-new-window") && BrowserSignIn.Arguments("firefox").Contains("accounts.google.com"), "Firefox sign-in launch arguments");
                 clientSettings.CookieSource = "none";

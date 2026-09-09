@@ -313,6 +313,7 @@ namespace YTMusicLite.Client
             youtubeAccessBody = access.Controls.OfType<Label>().ElementAt(2);
             FlowLayoutPanel accessButtons = new FlowLayoutPanel { Left = 14, Top = 102, Width = 670, Height = 38, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Surface };
             accessButtons.Controls.Add(SettingsButton("Edge", delegate { SetBrowserAccess("edge"); }));
+            accessButtons.Controls.Add(SettingsButton("Brave", delegate { SetBrowserAccess("brave"); }));
             accessButtons.Controls.Add(SettingsButton("Chrome", delegate { SetBrowserAccess("chrome"); }));
             accessButtons.Controls.Add(SettingsButton("Firefox", delegate { SetBrowserAccess("firefox"); }));
             accessButtons.Controls.Add(SettingsButton("cookies.txt", ImportCookies));
@@ -320,7 +321,7 @@ namespace YTMusicLite.Client
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.1", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.2", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };
