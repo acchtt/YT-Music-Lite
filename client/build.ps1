@@ -31,5 +31,5 @@ $updater = Join-Path $build 'YTMusicLite.Updater.exe'
 & $csc /nologo /target:winexe /platform:x64 /optimize+ /langversion:5 "/out:$updater" /reference:System.dll /reference:System.Core.dll /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll (Join-Path $root 'Updater.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed.' }
 
-Set-Content -Path (Join-Path $build 'VERSION.txt') -Value '6.0.0' -Encoding ASCII
+Set-Content -Path (Join-Path $build 'VERSION.txt') -Value '6.0.1' -Encoding ASCII
 Write-Host "Client build complete: $app" -ForegroundColor Green

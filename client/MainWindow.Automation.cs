@@ -35,6 +35,8 @@ namespace YTMusicLite.Client
                 Assert(settingsPanel.Visible && !trackList.Visible, "Settings page");
                 clientSettings.CookieSource = "edge";
                 Assert(YtDlpOptions.Authentication(clientSettings).Contains("--cookies-from-browser edge"), "Browser authentication arguments");
+                Assert(BrowserSignIn.Arguments("edge").Contains("--new-window") && BrowserSignIn.Arguments("edge").Contains("accounts.google.com"), "Edge sign-in launch arguments");
+                Assert(BrowserSignIn.Arguments("firefox").Contains("-new-window") && BrowserSignIn.Arguments("firefox").Contains("accounts.google.com"), "Firefox sign-in launch arguments");
                 clientSettings.CookieSource = "none";
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-settings.png"); }
                 Navigate(AppPage.Home, null, true);
