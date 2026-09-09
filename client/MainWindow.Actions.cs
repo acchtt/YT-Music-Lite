@@ -467,8 +467,13 @@ namespace YTMusicLite.Client
             catch (Exception error) { statusLabel.Text = "Update failed: " + error.Message; }
         }
 
-        private void SetBrowserAccess(string browser)
+        private async void SetBrowserAccess(string browser)
         {
+            if (string.Equals(browser, "brave", StringComparison.OrdinalIgnoreCase))
+            {
+                await SignInWithBraveAsync();
+                return;
+            }
             string error = BrowserSignIn.Open(browser);
             if (!string.IsNullOrEmpty(error))
             {
@@ -478,12 +483,62 @@ namespace YTMusicLite.Client
             }
             clientSettings.CookieSource = browser;
             clientSettings.CookieFile = "";
+            clientSettings.CookieProfile = "";
+            clientSettings.AccessVerified = false;
             SaveAccessSettings();
             MessageBox.Show(this,
                 "A YouTube Music sign-in window has opened.\n\nFinish signing in, then close the browser so YT Music Lite can securely read that session when you play a song.",
                 "Finish signing in",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+
+        private async Task SignInWithBraveAsync()
+        {
+            string error;
+            BrowserSignInSession session = BrowserSignIn.OpenDedicatedBrave(out error);
+            if (session == null)
+            {
+                statusLabel.Text = error;
+                MessageBox.Show(this, error, "YouTube sign-in", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            clientSettings.CookieSource = "brave";
+            clientSettings.CookieFile = "";
+            clientSettings.CookieProfile = session.ProfileDirectory;
+            clientSettings.AccessVerified = false;
+            SaveAccessSettings();
+            youtubeAccessTitle.Text = "Waiting for Brave sign-in";
+            youtubeAccessBody.Text = "Finish signing in inside the Brave window, then close that window. Verification will continue automatically.";
+            statusLabel.Text = "Waiting for Brave sign-in…";
+            try { await Task.Run(delegate { session.Process.WaitForExit(); }); }
+            catch (Exception waitError)
+            {
+                session.Process.Dispose();
+                if (closing || IsDisposed) return;
+                MessageBox.Show(this, "Could not finish Brave sign-in: " + waitError.Message, "Sign-in failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            session.Process.Dispose();
+            if (closing || IsDisposed) return;
+            statusLabel.Text = "Verifying Brave session…";
+            youtubeAccessTitle.Text = "Verifying sign-in…";
+            error = await BrowserAccessValidator.ValidateAsync(clientSettings);
+            if (string.IsNullOrEmpty(error))
+            {
+                clientSettings.AccessVerified = true;
+                SaveAccessSettings();
+                MessageBox.Show(this, "Brave is connected. YT Music Lite can now use this account for playback.", "Sign-in complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                clientSettings.AccessVerified = false;
+                SaveAccessSettings();
+                statusLabel.Text = error;
+                youtubeAccessTitle.Text = "Brave sign-in failed";
+                youtubeAccessBody.Text = error;
+                MessageBox.Show(this, error, "Sign-in was not completed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void ImportCookies()
@@ -493,6 +548,8 @@ namespace YTMusicLite.Client
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 clientSettings.CookieSource = "file";
                 clientSettings.CookieFile = dialog.FileName;
+                clientSettings.CookieProfile = "";
+                clientSettings.AccessVerified = false;
                 SaveAccessSettings();
             }
         }
@@ -501,6 +558,8 @@ namespace YTMusicLite.Client
         {
             clientSettings.CookieSource = "none";
             clientSettings.CookieFile = "";
+            clientSettings.CookieProfile = "";
+            clientSettings.AccessVerified = false;
             SaveAccessSettings();
         }
 
@@ -508,8 +567,8 @@ namespace YTMusicLite.Client
         {
             if (!automation) settingsStore.Save(clientSettings);
             if (youtubeAccessTitle != null) youtubeAccessTitle.Text = YtDlpOptions.FriendlyName(clientSettings);
-            if (youtubeAccessBody != null) youtubeAccessBody.Text = clientSettings.CookieSource == "none" ? "Choose a browser to open YouTube Music sign-in, or import cookies.txt." : "Signed in through " + YtDlpOptions.FriendlyName(clientSettings) + ". Close that browser before playback so its session can be read.";
-            statusLabel.Text = clientSettings.CookieSource == "none" ? "YouTube access cleared" : "YouTube access set to " + YtDlpOptions.FriendlyName(clientSettings);
+            if (youtubeAccessBody != null) youtubeAccessBody.Text = clientSettings.CookieSource == "none" ? "Choose a browser to open YouTube Music sign-in, or import cookies.txt." : (clientSettings.AccessVerified ? "The authenticated session has been verified and is ready for playback." : "This browser session has not been verified yet.");
+            statusLabel.Text = clientSettings.CookieSource == "none" ? "YouTube access cleared" : YtDlpOptions.FriendlyName(clientSettings);
         }
 
         private void MainKeyDown(object sender, KeyEventArgs e)

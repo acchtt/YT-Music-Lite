@@ -8,11 +8,14 @@ namespace YTMusicLite.Client
     {
         public string CookieSource { get; set; }
         public string CookieFile { get; set; }
+        public string CookieProfile { get; set; }
+        public bool AccessVerified { get; set; }
 
         public ClientSettings()
         {
             CookieSource = "none";
             CookieFile = "";
+            CookieProfile = "";
         }
     }
 
@@ -55,7 +58,13 @@ namespace YTMusicLite.Client
                 if (string.IsNullOrWhiteSpace(settings.CookieFile) || !File.Exists(settings.CookieFile)) return "";
                 return " --cookies " + ProcessTools.Quote(settings.CookieFile);
             }
-            if (settings.CookieSource == "edge" || settings.CookieSource == "brave" || settings.CookieSource == "chrome" || settings.CookieSource == "firefox") return " --cookies-from-browser " + settings.CookieSource;
+            if (settings.CookieSource == "edge" || settings.CookieSource == "brave" || settings.CookieSource == "chrome" || settings.CookieSource == "firefox")
+            {
+                string source = settings.CookieSource;
+                if (string.IsNullOrWhiteSpace(settings.CookieProfile)) return " --cookies-from-browser " + source;
+                source += ":" + settings.CookieProfile;
+                return " --cookies-from-browser " + ProcessTools.Quote(source);
+            }
             return "";
         }
 
@@ -63,7 +72,8 @@ namespace YTMusicLite.Client
         {
             if (settings == null || settings.CookieSource == "none") return "Anonymous access";
             if (settings.CookieSource == "file") return "cookies.txt";
-            return char.ToUpperInvariant(settings.CookieSource[0]) + settings.CookieSource.Substring(1) + " sign-in";
+            string browser = char.ToUpperInvariant(settings.CookieSource[0]) + settings.CookieSource.Substring(1);
+            return settings.AccessVerified ? browser + " connected" : browser + " not verified";
         }
 
         public static string ExplainFailure(string error, ClientSettings settings)

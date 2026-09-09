@@ -5,6 +5,12 @@ using System.IO;
 
 namespace YTMusicLite.Client
 {
+    internal sealed class BrowserSignInSession
+    {
+        public Process Process { get; set; }
+        public string ProfileDirectory { get; set; }
+    }
+
     internal static class BrowserSignIn
     {
         internal const string AccountChooserUrl = "https://accounts.google.com/AccountChooser?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F";
@@ -29,6 +35,32 @@ namespace YTMusicLite.Client
             catch (Exception error)
             {
                 return "Could not open " + DisplayName(browser) + ": " + error.Message;
+            }
+        }
+
+        public static BrowserSignInSession OpenDedicatedBrave(out string error)
+        {
+            error = null;
+            string executable = FindExecutable("brave");
+            if (string.IsNullOrEmpty(executable))
+            {
+                error = "Brave was not found on this PC. Install it or choose another browser.";
+                return null;
+            }
+            string userData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "YTMusicLite", "BraveSignIn");
+            string profile = Path.Combine(userData, "Default");
+            Directory.CreateDirectory(userData);
+            try
+            {
+                string arguments = "--user-data-dir=" + ProcessTools.Quote(userData) + " --profile-directory=Default --disable-background-mode --no-first-run --new-window " + ProcessTools.Quote(AccountChooserUrl);
+                Process process = Process.Start(new ProcessStartInfo(executable, arguments) { UseShellExecute = true });
+                if (process == null) { error = "Windows could not open Brave."; return null; }
+                return new BrowserSignInSession { Process = process, ProfileDirectory = profile };
+            }
+            catch (Exception exception)
+            {
+                error = "Could not open Brave: " + exception.Message;
+                return null;
             }
         }
 

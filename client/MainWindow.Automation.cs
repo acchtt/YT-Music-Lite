@@ -37,10 +37,15 @@ namespace YTMusicLite.Client
                 Assert(YtDlpOptions.Authentication(clientSettings).Contains("--cookies-from-browser edge"), "Browser authentication arguments");
                 clientSettings.CookieSource = "brave";
                 Assert(YtDlpOptions.Authentication(clientSettings).Contains("--cookies-from-browser brave"), "Brave authentication arguments");
+                clientSettings.CookieProfile = @"C:\Auth Profile\Default";
+                Assert(YtDlpOptions.Authentication(clientSettings).Contains("brave:C:\\Auth Profile\\Default"), "Dedicated Brave profile arguments");
+                Assert(BrowserAccessValidator.HasAccountCookie(".youtube.com\tTRUE\t/\tTRUE\t0\tSAPISID\tsecret"), "Authenticated cookie detection");
+                Assert(!BrowserAccessValidator.HasAccountCookie(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\tplain"), "Anonymous cookie rejection");
                 Assert(BrowserSignIn.Arguments("brave").Contains("--new-window") && BrowserSignIn.Arguments("brave").Contains("accounts.google.com"), "Brave sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("edge").Contains("--new-window") && BrowserSignIn.Arguments("edge").Contains("accounts.google.com"), "Edge sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("firefox").Contains("-new-window") && BrowserSignIn.Arguments("firefox").Contains("accounts.google.com"), "Firefox sign-in launch arguments");
                 clientSettings.CookieSource = "none";
+                clientSettings.CookieProfile = "";
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-settings.png"); }
                 Navigate(AppPage.Home, null, true);
                 Assert(homeTiles.Controls.Count > 0 && trackList.Items.Count >= 2, "Home page");
