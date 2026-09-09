@@ -42,6 +42,9 @@ jobs:
             $App = Start-Process .\YTMusicLite.exe -ArgumentList @('--catalog-check', 'YouTube Audio Library') -PassThru
             if (-not $App.WaitForExit(60000)) { $App.Kill(); throw 'Catalog check timed out' }
             if ($App.ExitCode -ne 0 -or -not (Test-Path catalog-check.txt) -or (Get-Content catalog-check.txt -Raw) -notmatch '^PASS:') { throw "Catalog check failed: $(Get-Content catalog-check.txt -Raw)" }
+            $Playback = Start-Process .\YTMusicLite.exe -ArgumentList @('--youtube-playback-check', 'YouTube Audio Library') -PassThru
+            if (-not $Playback.WaitForExit(90000)) { $Playback.Kill(); throw 'YouTube playback check timed out' }
+            if ($Playback.ExitCode -ne 0 -or -not (Test-Path youtube-playback-check.txt) -or (Get-Content youtube-playback-check.txt -Raw) -notmatch '^PASS:') { throw "YouTube playback check failed: $(Get-Content youtube-playback-check.txt -Raw)" }
           } finally { Pop-Location }
 
       - name: Validate complete interface

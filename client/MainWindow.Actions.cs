@@ -143,7 +143,6 @@ namespace YTMusicLite.Client
             string query = searchBox.Text.Trim();
             if (searching || string.IsNullOrWhiteSpace(query)) { if (string.IsNullOrWhiteSpace(query)) { Navigate(AppPage.Search, null, true); searchBox.Focus(); } return; }
             searching = true;
-            searchButton.Enabled = false;
             Navigate(AppPage.Search, null, currentPage != AppPage.Search);
             subtitle.Text = "Searching YouTube Music…";
             statusLabel.Text = "Searching…";
@@ -160,7 +159,6 @@ namespace YTMusicLite.Client
             finally
             {
                 searching = false;
-                searchButton.Enabled = true;
                 if (!closing && currentPage == AppPage.Search) RenderPage();
             }
         }

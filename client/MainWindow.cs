@@ -36,7 +36,6 @@ namespace YTMusicLite.Client
         private Label heading;
         private Label subtitle;
         private TextBox searchBox;
-        private IconButton searchButton;
         private IconButton backButton;
         private IconButton forwardButton;
         private FlowLayoutPanel actionBar;
@@ -211,10 +210,9 @@ namespace YTMusicLite.Client
 
         private Control BuildTopBar()
         {
-            TableLayoutPanel top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, BackColor = Theme.Window, Margin = Padding.Empty };
+            TableLayoutPanel top = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = Theme.Window, Margin = Padding.Empty };
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 58));
             FlowLayoutPanel historyButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Window, Padding = new Padding(0, 8, 0, 0) };
             backButton = new IconButton { Icon = AppIcon.Back, AccessibleName = "Back", Enabled = false };
             forwardButton = new IconButton { Icon = AppIcon.Forward, AccessibleName = "Forward", Enabled = false };
@@ -224,15 +222,12 @@ namespace YTMusicLite.Client
             historyButtons.Controls.Add(forwardButton);
             top.Controls.Add(historyButtons, 0, 0);
 
-            SectionCard searchShell = new SectionCard { Dock = DockStyle.Fill, Margin = new Padding(2, 8, 12, 8), Padding = new Padding(16, 8, 10, 7) };
+            SectionCard searchShell = new SectionCard { Dock = DockStyle.Fill, Margin = new Padding(2, 8, 0, 8), Padding = new Padding(16, 8, 10, 7) };
             searchBox = new TextBox { BorderStyle = BorderStyle.None, BackColor = Theme.Surface, ForeColor = Theme.Text, Dock = DockStyle.Fill, Font = new Font("Segoe UI", 10), AccessibleName = "Search YouTube Music" };
             searchBox.HandleCreated += delegate { SendMessage(searchBox.Handle, SetCueBanner, (IntPtr)1, "Search songs or artists"); };
             searchBox.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(); } };
             searchShell.Controls.Add(searchBox);
             top.Controls.Add(searchShell, 1, 0);
-            searchButton = new IconButton { Icon = AppIcon.Forward, Accent = true, Dock = DockStyle.Fill, Margin = new Padding(4, 8, 4, 8), AccessibleName = "Run search" };
-            searchButton.Click += async delegate { await SearchAsync(); };
-            top.Controls.Add(searchButton, 2, 0);
             return top;
         }
 
@@ -305,12 +300,12 @@ namespace YTMusicLite.Client
         private Panel BuildSettingsPanel()
         {
             Panel panel = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Window, Visible = false, AutoScroll = true };
-            FlowLayoutPanel stack = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 450, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Window };
+            FlowLayoutPanel stack = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 420, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Window };
             stack.Controls.Add(SettingsCard("Playback", "Browser-free audio", "Audio runs through mpv. The YouTube resolver starts only when a song is opened and exits immediately afterward."));
             stack.Controls.Add(SettingsCard("Memory", "Low-memory by design", "Artwork is loaded on demand, the in-memory cache is bounded, and playback buffers are capped."));
             SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
-            update.Height = 178;
-            PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 122 };
+            update.Height = 150;
+            PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 105 };
             check.Click += async delegate { await CheckForUpdatesAsync(); };
             update.Controls.Add(check);
             stack.Controls.Add(update);
@@ -320,10 +315,10 @@ namespace YTMusicLite.Client
 
         private SectionCard SettingsCard(string eyebrow, string title, string body)
         {
-            SectionCard card = new SectionCard { Width = 700, Height = 142, Margin = new Padding(0, 0, 0, 12) };
+            SectionCard card = new SectionCard { Width = 700, Height = 120, Margin = new Padding(0, 0, 0, 12) };
             Label eyebrowLabel = new Label { Text = eyebrow.ToUpperInvariant(), ForeColor = Theme.Accent, Font = new Font("Segoe UI", 8, FontStyle.Bold), AutoSize = false, Left = 18, Top = 15, Width = 650, Height = 18 };
             Label titleLabel = new Label { Text = title, ForeColor = Theme.Text, Font = new Font("Segoe UI", 12, FontStyle.Bold), AutoSize = false, Left = 18, Top = 38, Width = 650, Height = 28 };
-            Label bodyLabel = new Label { Text = body, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 9), AutoSize = false, Left = 18, Top = 69, Width = 650, Height = 48 };
+            Label bodyLabel = new Label { Text = body, ForeColor = Theme.Muted, Font = new Font("Segoe UI", 9), AutoSize = false, Left = 18, Top = 69, Width = 650, Height = 36 };
             card.Controls.Add(eyebrowLabel); card.Controls.Add(titleLabel); card.Controls.Add(bodyLabel);
             return card;
         }

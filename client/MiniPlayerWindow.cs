@@ -34,7 +34,7 @@ namespace YTMusicLite.Client
             next = nextAction;
             expand = expandAction;
             Text = "YT Music Lite mini player";
-            Size = new Size(472, 178);
+            Size = new Size(472, 192);
             MinimumSize = Size;
             MaximumSize = Size;
             FormBorderStyle = FormBorderStyle.None;
