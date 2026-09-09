@@ -33,6 +33,7 @@ namespace YTMusicLite.Client
                 Assert(trackList.Items.Count == 2, "Queue navigation");
                 Navigate(AppPage.Settings, null, true);
                 Assert(settingsPanel.Visible && !trackList.Visible, "Settings page");
+                using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-settings.png"); }
                 Navigate(AppPage.Home, null, true);
                 Assert(homeTiles.Controls.Count > 0 && trackList.Items.Count >= 2, "Home page");
 

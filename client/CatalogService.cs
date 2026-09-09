@@ -32,7 +32,9 @@ namespace YTMusicLite.Client
             string json = await output;
             string error = await errors;
             if (active == process) active = null;
-            if (process.ExitCode != 0) throw new InvalidOperationException("YouTube search failed. " + Trim(error, 180));
+            int exitCode = process.ExitCode;
+            process.Dispose();
+            if (exitCode != 0) throw new InvalidOperationException("YouTube search failed. " + Trim(error, 180));
 
             List<Track> results = new List<Track>();
             foreach (string line in json.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))

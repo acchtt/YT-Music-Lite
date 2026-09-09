@@ -88,6 +88,7 @@ namespace YTMusicLite.Client
             }
             trackList.SetTracks(visible);
             UpdateActionState();
+            if (currentPage == AppPage.Search && !searching) searchBox.Focus();
         }
 
         private List<Track> VisibleTracks()

@@ -27,6 +27,23 @@ jobs:
         shell: pwsh
         run: .\client\measure.ps1
 
+      - name: Validate live YouTube catalog search
+        shell: pwsh
+        run: |
+          $Build = Resolve-Path .\client\build
+          Invoke-WebRequest 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile (Join-Path $Build 'yt-dlp.exe')
+          $DenoZip = Join-Path $env:RUNNER_TEMP 'deno.zip'
+          $DenoDir = Join-Path $env:RUNNER_TEMP 'deno'
+          Invoke-WebRequest 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip' -OutFile $DenoZip
+          Expand-Archive $DenoZip $DenoDir -Force
+          Copy-Item (Join-Path $DenoDir 'deno.exe') (Join-Path $Build 'deno.exe') -Force
+          Push-Location $Build
+          try {
+            $App = Start-Process .\YTMusicLite.exe -ArgumentList @('--catalog-check', 'YouTube Audio Library') -PassThru
+            if (-not $App.WaitForExit(60000)) { $App.Kill(); throw 'Catalog check timed out' }
+            if ($App.ExitCode -ne 0 -or -not (Test-Path catalog-check.txt) -or (Get-Content catalog-check.txt -Raw) -notmatch '^PASS:') { throw "Catalog check failed: $(Get-Content catalog-check.txt -Raw)" }
+          } finally { Pop-Location }
+
       - name: Validate complete interface
         shell: pwsh
         run: |
@@ -46,4 +63,3 @@ jobs:
             client/build/*.csv
             client/build/*.txt
             client/build/*.png
-

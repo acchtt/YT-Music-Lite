@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -10,6 +11,8 @@ namespace YTMusicLite.Client
 {
     internal sealed partial class MainWindow : Form
     {
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr handle, int message, IntPtr parameter, string text);
+        private const int SetCueBanner = 0x1501;
         private readonly LibraryStore store;
         private readonly LibraryData library;
         private readonly CatalogService catalog;
@@ -223,10 +226,11 @@ namespace YTMusicLite.Client
 
             SectionCard searchShell = new SectionCard { Dock = DockStyle.Fill, Margin = new Padding(2, 8, 12, 8), Padding = new Padding(16, 8, 10, 7) };
             searchBox = new TextBox { BorderStyle = BorderStyle.None, BackColor = Theme.Surface, ForeColor = Theme.Text, Dock = DockStyle.Fill, Font = new Font("Segoe UI", 10), AccessibleName = "Search YouTube Music" };
+            searchBox.HandleCreated += delegate { SendMessage(searchBox.Handle, SetCueBanner, (IntPtr)1, "Search songs or artists"); };
             searchBox.KeyDown += async delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) { e.SuppressKeyPress = true; await SearchAsync(); } };
             searchShell.Controls.Add(searchBox);
             top.Controls.Add(searchShell, 1, 0);
-            searchButton = new IconButton { Icon = AppIcon.Search, Accent = true, Dock = DockStyle.Fill, Margin = new Padding(4, 8, 4, 8), AccessibleName = "Search" };
+            searchButton = new IconButton { Icon = AppIcon.Forward, Accent = true, Dock = DockStyle.Fill, Margin = new Padding(4, 8, 4, 8), AccessibleName = "Run search" };
             searchButton.Click += async delegate { await SearchAsync(); };
             top.Controls.Add(searchButton, 2, 0);
             return top;
