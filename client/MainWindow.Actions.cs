@@ -469,9 +469,21 @@ namespace YTMusicLite.Client
 
         private void SetBrowserAccess(string browser)
         {
+            string error = BrowserSignIn.Open(browser);
+            if (!string.IsNullOrEmpty(error))
+            {
+                statusLabel.Text = error;
+                MessageBox.Show(this, error, "YouTube sign-in", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             clientSettings.CookieSource = browser;
             clientSettings.CookieFile = "";
             SaveAccessSettings();
+            MessageBox.Show(this,
+                "A YouTube Music sign-in window has opened.\n\nFinish signing in, then close the browser so YT Music Lite can securely read that session when you play a song.",
+                "Finish signing in",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
 
         private void ImportCookies()
@@ -496,7 +508,7 @@ namespace YTMusicLite.Client
         {
             if (!automation) settingsStore.Save(clientSettings);
             if (youtubeAccessTitle != null) youtubeAccessTitle.Text = YtDlpOptions.FriendlyName(clientSettings);
-            if (youtubeAccessBody != null) youtubeAccessBody.Text = clientSettings.CookieSource == "none" ? "Most music works anonymously. If YouTube asks you to confirm you are not a bot, choose a signed-in browser or cookies.txt." : "This sign-in source is used only by the on-demand YouTube resolver. No browser stays open.";
+            if (youtubeAccessBody != null) youtubeAccessBody.Text = clientSettings.CookieSource == "none" ? "Choose a browser to open YouTube Music sign-in, or import cookies.txt." : "Signed in through " + YtDlpOptions.FriendlyName(clientSettings) + ". Close that browser before playback so its session can be read.";
             statusLabel.Text = clientSettings.CookieSource == "none" ? "YouTube access cleared" : "YouTube access set to " + YtDlpOptions.FriendlyName(clientSettings);
         }
 
