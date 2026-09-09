@@ -1,0 +1,72 @@
+name: Native client
+
+on:
+  pull_request:
+    paths:
+      - 'client/**'
+      - '.github/workflows/client.yml'
+      - '.github/workflows/ytmlite-release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install playback test dependency
+        shell: pwsh
+        run: |
+          choco install mpv --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'mpv installation failed' }
+          'C:\ProgramData\chocolatey\lib\mpvio.install\tools' | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Compile and measure native client
+        shell: pwsh
+        run: .\client\measure.ps1
+
+      - name: Validate live YouTube catalog search
+        shell: pwsh
+        run: |
+          $Build = Resolve-Path .\client\build
+          Invoke-WebRequest 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' -OutFile (Join-Path $Build 'yt-dlp.exe')
+          $DenoZip = Join-Path $env:RUNNER_TEMP 'deno.zip'
+          $DenoDir = Join-Path $env:RUNNER_TEMP 'deno'
+          Invoke-WebRequest 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip' -OutFile $DenoZip
+          Expand-Archive $DenoZip $DenoDir -Force
+          Copy-Item (Join-Path $DenoDir 'deno.exe') (Join-Path $Build 'deno.exe') -Force
+          Push-Location $Build
+          try {
+            $App = Start-Process .\YTMusicLite.exe -ArgumentList @('--catalog-check', 'YouTube Audio Library') -PassThru
+            if (-not $App.WaitForExit(60000)) { $App.Kill(); throw 'Catalog check timed out' }
+            if ($App.ExitCode -ne 0 -or -not (Test-Path catalog-check.txt) -or (Get-Content catalog-check.txt -Raw) -notmatch '^PASS:') { throw "Catalog check failed: $(Get-Content catalog-check.txt -Raw)" }
+            $Playback = Start-Process .\YTMusicLite.exe -ArgumentList @('--youtube-playback-check', 'YouTube Audio Library') -PassThru
+            if (-not $Playback.WaitForExit(90000)) { $Playback.Kill(); throw 'YouTube playback check timed out' }
+            $PlaybackReport = Get-Content youtube-playback-check.txt -Raw
+            if ($Playback.ExitCode -ne 0 -or $PlaybackReport -notmatch '^PASS:') {
+              if ($PlaybackReport -match 'requested sign-in|not a bot') { Write-Warning 'The hosted CI IP was challenged by YouTube; signed-in browser/cookies recovery is covered by the interface check.' }
+              else { throw "YouTube playback check failed: $PlaybackReport" }
+            }
+          } finally { Pop-Location }
+
+      - name: Validate complete interface
+        shell: pwsh
+        run: |
+          Push-Location .\client\build
+          try {
+            $App = Start-Process .\YTMusicLite.exe -ArgumentList '--ui-check' -PassThru
+            if (-not $App.WaitForExit(30000)) { $App.Kill(); throw 'UI check timed out' }
+            if (-not (Test-Path ui-check.txt) -or (Get-Content ui-check.txt -Raw) -notmatch '^PASS:') { throw "Client UI check failed: $(Get-Content ui-check.txt -Raw)" }
+          } finally { Pop-Location }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-client-validation
+          path: |
+            client/build/*.exe
+            client/build/*.csv
+            client/build/*.txt
+            client/build/*.png

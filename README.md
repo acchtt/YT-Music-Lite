@@ -1,30 +1,40 @@
 # YT Music Lite
 
-A lightweight Windows app for YouTube Music, built with C# WinForms and Microsoft WebView2. YouTube Music provides the library, search and official player; the desktop shell adds a mini player, tray controls, sleep mode and verified updates.
+YT Music Lite is a browser-free Windows music client focused on low memory use. It provides a full desktop interface for YouTube search, saved music, local playlists, a playback queue, local audio, media keys, a mini player, and verified in-app updates.
 
-## Build and run
+## Architecture
+
+The production client lives in `client/` and uses only Windows-native controls. It does not host WebView2 or another browser engine.
+
+- `yt-dlp` performs an on-demand YouTube search or resolves one audio URL, then exits.
+- If YouTube challenges anonymous playback, Settings can use cookies from Edge, Chrome, Firefox, or an exported `cookies.txt`; the app stores only that choice/path.
+- `mpv` plays audio with bounded buffers and no video pipeline.
+- Library, recent music, and playlists are stored locally under `%LocalAppData%\YTMusicLite`.
+- Artwork is cached on disk and the decoded in-memory cache is bounded.
+- Update archives must pass SHA-256 verification before installation.
+
+## Build
 
 On Windows with .NET Framework 4.8 and PowerShell:
 
 ```powershell
-.\yt-music-lite\build.ps1 -Run
+.\client\build.ps1
 ```
 
-The build script downloads its WebView2 SDK dependency. If the app reports a missing WebView2 runtime, run `yt-music-lite/install-webview2-runtime.cmd`.
+For playback, place `mpv.exe`, `yt-dlp.exe`, and `deno.exe` beside `YTMusicLite.exe`. Release builds include all three.
 
-## Desktop controls
+Run the complete local-audio playback, process-cleanup, and memory test with:
 
-- Use Back/Forward to navigate; unavailable navigation actions are disabled.
-- Open the mini player from the toolbar or tray. Its last position and **Always on top** preference are remembered.
-- Tab through native controls. Use Space/Enter for buttons, Space for switches, and arrow keys for sliders. Seeking moves five seconds at a time; Home/End jump to the beginning/end.
-- **Pause and sleep** pauses music and reduces resource use. **Resume** returns to the player; playback stays paused until you press Play.
-- Closing/minimizing can keep the app in the tray. Use the tray menu's **Exit** to quit, or change this behavior in Settings.
-- **Settings → About and updates** shows release notes, download progress and verification status. Download while listening, then choose **Restart to update** when ready.
+```powershell
+.\client\measure.ps1
+```
 
-## Source and verification
+## Keyboard and media controls
 
-The current Windows app lives in `yt-music-lite/`. `src/` and `src-tauri/` contain the earlier React/Tauri implementation and are not used by the current native release workflow.
+- `Ctrl+K` or `Ctrl+L` focuses Search.
+- `Space` toggles play/pause when focus is outside a text field.
+- `Alt+Left` and `Alt+Right` move through page history.
+- `Ctrl+M` opens the mini player.
+- Hardware play/pause, previous, and next media keys are supported.
 
-`.github/workflows/desktop-ux-check.yml` builds the Windows app and runs UI regression checks, including scaled Settings captures. Those captures exercise layout scaling; real multi-monitor DPI changes and screen-reader behavior still need manual Windows checks.
-
-Releases use the `ytmlite-v*` channel in this repository. The updater verifies SHA-256 before preparing an update and again before installation.
+The older Tauri, WebView2, and prototype folders are retained only as repository history and are not part of the production build or release.
