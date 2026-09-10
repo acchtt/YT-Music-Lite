@@ -1,40 +1,52 @@
-# YT Music Lite
+# YT Music Lite 7 — Windows
 
-YT Music Lite is a browser-free Windows music client focused on low memory use. It provides a full desktop interface for YouTube search, saved music, local playlists, a playback queue, local audio, media keys, a mini player, and verified in-app updates.
+YT Music Lite 7 is a Windows-only, Spotify-inspired YouTube Music desktop client built with Tauri 2, Svelte 5, Rust, SQLite, and the YouTube IFrame Player API.
 
-## Architecture
+## Runtime design
 
-The production client lives in `client/` and uses only Windows-native controls. It does not host WebView2 or another browser engine.
+- One WebView2 window and one persistent player instance.
+- Visible 200px YouTube player surface in the Now Playing panel.
+- Playback pauses when the app is minimized.
+- Rust owns account/catalog access and local SQLite listening history.
+- Svelte owns the shell, queue, transport controls, and bounded UI state.
+- Weekly Mix uses locally weighted listening history to expand recommendations around favorite artists.
+- Search is debounced and track artwork is lazy-loaded.
 
-- `yt-dlp` performs an on-demand YouTube search or resolves one audio URL, then exits.
-- If YouTube challenges anonymous playback, Settings can use cookies from Edge, Brave, Chrome, Firefox, or an exported `cookies.txt`; the app stores only that choice/path.
-- `mpv` plays audio with bounded buffers and no video pipeline.
-- Library, recent music, and playlists are stored locally under `%LocalAppData%\YTMusicLite`.
-- Artwork is cached on disk and the decoded in-memory cache is bounded.
-- Update archives must pass SHA-256 verification before installation.
+The `client/`, `yt-music-lite/`, and `native-prototype/` directories are retained as previous implementation history. Version 7 builds from `src/` and `src-tauri/`.
 
-## Build
+## Requirements
 
-On Windows with .NET Framework 4.8 and PowerShell:
+- Windows 10 or Windows 11
+- WebView2 Runtime
+- Node.js 20.19+
+- Rust stable with the MSVC toolchain
+- Visual Studio Build Tools with Desktop development with C++
+
+## Development
 
 ```powershell
-.\client\build.ps1
+npm ci
+npm run tauri:dev
 ```
 
-For playback, place `mpv.exe`, `yt-dlp.exe`, and `deno.exe` beside `YTMusicLite.exe`. Release builds include all three.
-
-Run the complete local-audio playback, process-cleanup, and memory test with:
+## Build the Windows installer
 
 ```powershell
-.\client\measure.ps1
+.\scripts\build-windows-v7.ps1
 ```
 
-## Keyboard and media controls
+The NSIS installer is written under `src-tauri\target\release\bundle\nsis`.
 
-- `Ctrl+K` or `Ctrl+L` focuses Search.
-- `Space` toggles play/pause when focus is outside a text field.
-- `Alt+Left` and `Alt+Right` move through page history.
-- `Ctrl+M` opens the mini player.
-- Hardware play/pause, previous, and next media keys are supported.
+## RAM release gate
 
-The older Tauri, WebView2, and prototype folders are retained only as repository history and are not part of the production build or release.
+Start a release build, connect an account, load a large list, begin playback, and run:
+
+```powershell
+.\scripts\measure-windows-v7.ps1
+```
+
+The test fails if the median private working set exceeds 200 MB. Run it without DevTools and after Windows has finished initializing WebView2.
+
+## Playback notes
+
+The player uses YouTube's supported embedded-player interface. It intentionally does not extract audio URLs, download media, or continue playback while minimized. The packaged app must be tested to confirm WebView2 sends the player identification/referrer expected by YouTube.

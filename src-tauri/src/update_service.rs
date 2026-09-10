@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter};
 
-const UPDATE_REPOSITORY: &str = "acchtt/YTM-Desktop";
+const UPDATE_REPOSITORY: &str = "acchtt/YT-Music-Lite";
 const GITHUB_API_BASE: &str = "https://api.github.com";
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,12 +62,13 @@ fn parse_release_version(tag: &str) -> Result<Version, String> {
         .strip_prefix("app-v")
         .or_else(|| tag.trim().strip_prefix('v'))
         .unwrap_or(tag.trim());
-    Version::parse(value).map_err(|e| format!("Release tag '{tag}' is not a valid app version: {e}"))
+    Version::parse(value)
+        .map_err(|e| format!("Release tag '{tag}' is not a valid app version: {e}"))
 }
 
 fn client(app: &AppHandle) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
-        .user_agent(format!("YTM-Desktop/{}", app.package_info().version))
+        .user_agent(format!("YT-Music-Lite/{}", app.package_info().version))
         .redirect(reqwest::redirect::Policy::limited(10))
         .build()
         .map_err(|e| e.to_string())
@@ -85,12 +86,15 @@ async fn latest_release(app: &AppHandle) -> Result<GithubRelease, String> {
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Err(format!(
-            "The YTM Desktop release channel is not online yet ({UPDATE_REPOSITORY}). Publish the first GitHub Release, then in-app updates work automatically."
+            "The YT Music Lite release channel is not online yet ({UPDATE_REPOSITORY}). Publish the first GitHub Release, then in-app updates work automatically."
         ));
     }
 
     if response.status() == reqwest::StatusCode::FORBIDDEN {
-        return Err("GitHub temporarily refused the update check (rate limit). Try again in a few minutes.".into());
+        return Err(
+            "GitHub temporarily refused the update check (rate limit). Try again in a few minutes."
+                .into(),
+        );
     }
 
     response
@@ -101,7 +105,9 @@ async fn latest_release(app: &AppHandle) -> Result<GithubRelease, String> {
         .map_err(|e| format!("Invalid update response: {e}"))
 }
 
-fn installer_assets<'a>(release: &'a GithubRelease) -> Result<(&'a GithubAsset, &'a GithubAsset), String> {
+fn installer_assets<'a>(
+    release: &'a GithubRelease,
+) -> Result<(&'a GithubAsset, &'a GithubAsset), String> {
     let installer = release
         .assets
         .iter()
@@ -115,14 +121,20 @@ fn installer_assets<'a>(release: &'a GithubRelease) -> Result<(&'a GithubAsset, 
                 name.ends_with(".exe") && !name.ends_with(".sha256")
             })
         })
-        .ok_or_else(|| "The latest release does not contain a Windows NSIS installer.".to_string())?;
+        .ok_or_else(|| {
+            "The latest release does not contain a Windows NSIS installer.".to_string()
+        })?;
 
     let checksum_name = format!("{}.sha256", installer.name);
     let checksum = release
         .assets
         .iter()
         .find(|asset| asset.name.eq_ignore_ascii_case(&checksum_name))
-        .ok_or_else(|| format!("The release is missing {checksum_name}. Refusing to install an unverified update."))?;
+        .ok_or_else(|| {
+            format!(
+                "The release is missing {checksum_name}. Refusing to install an unverified update."
+            )
+        })?;
 
     Ok((installer, checksum))
 }
@@ -165,7 +177,7 @@ pub async fn check(app: &AppHandle) -> Result<UpdateStatus, String> {
         published_at: release.published_at,
         source: Some(release.html_url),
         message: if available {
-            format!("YTM Desktop {latest} is ready to install.")
+            format!("YT Music Lite {latest} is ready to install.")
         } else {
             "You are up to date.".into()
         },
@@ -186,7 +198,7 @@ async fn download_installer(
     asset: &GithubAsset,
 ) -> Result<(PathBuf, String), String> {
     let filename = safe_asset_name(&asset.name)?;
-    let update_dir = std::env::temp_dir().join("YTM-Desktop-Update");
+    let update_dir = std::env::temp_dir().join("YT-Music-Lite-Update");
     fs::create_dir_all(&update_dir).map_err(|e| e.to_string())?;
     let path = update_dir.join(filename);
     let _ = fs::remove_file(&path);
@@ -199,7 +211,10 @@ async fn download_installer(
         .error_for_status()
         .map_err(|e| format!("Update download failed: {e}"))?;
 
-    let total = response.content_length().or(Some(asset.size)).filter(|v| *v > 0);
+    let total = response
+        .content_length()
+        .or(Some(asset.size))
+        .filter(|v| *v > 0);
     let mut stream = response.bytes_stream();
     let mut file = File::create(&path).map_err(|e| format!("Could not create update file: {e}"))?;
     let mut hasher = Sha256::new();
@@ -226,7 +241,10 @@ async fn download_installer(
     Ok((path, format!("{:x}", hasher.finalize())))
 }
 
-async fn expected_checksum(client: &reqwest::Client, asset: &GithubAsset) -> Result<String, String> {
+async fn expected_checksum(
+    client: &reqwest::Client,
+    asset: &GithubAsset,
+) -> Result<String, String> {
     let text = client
         .get(&asset.browser_download_url)
         .send()

@@ -1,26 +1,26 @@
 mod brave_auth;
 mod commands;
+mod discovery;
 mod models;
 mod music_service;
-mod official_web_player;
-mod player;
 mod update_service;
 
 use std::fs;
 use tauri::Manager;
 
 use brave_auth::BraveAuthBridgeState;
+use discovery::DiscoveryState;
 use music_service::MusicServiceState;
-use player::PlayerState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(MusicServiceState::default())
-        .manage(PlayerState::default())
         .manage(BraveAuthBridgeState::default())
         .setup(|app| {
             let handle = app.handle().clone();
+            let discovery = DiscoveryState::new(&handle).map_err(std::io::Error::other)?;
+            app.manage(discovery);
 
             if let Ok(dir) = handle.path().app_config_dir() {
                 let marker = dir.join("auth-path.txt");
@@ -50,12 +50,8 @@ pub fn run() {
             commands::get_history,
             commands::get_playlist_tracks,
             commands::get_lyrics,
-            commands::get_player_state,
-            commands::queue_track,
-            commands::player_control,
-            commands::sync_playback,
-            commands::playback_error,
-            commands::open_mini_player,
+            commands::record_listen,
+            commands::get_discover_weekly,
             commands::check_for_updates,
             commands::install_update,
         ])

@@ -1,5 +1,4 @@
-name: release-windows
-# Release pipeline: 0.4.0 and later
+name: YT Music Lite 7 Windows release
 
 on:
   workflow_dispatch:
@@ -15,7 +14,7 @@ concurrency:
 
 jobs:
   windows-release:
-    if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' || startsWith(github.event.head_commit.message, 'Publish YTM Desktop')
+    if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag' || startsWith(github.event.head_commit.message, 'Publish YT Music Lite 7')
     permissions:
       contents: write
     runs-on: windows-latest
@@ -38,7 +37,13 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Validate Svelte and Rust
+        run: |
+          npm run check
+          cargo fmt --manifest-path src-tauri/Cargo.toml --check
+          cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Build Windows NSIS installer
         run: npm run tauri:build -- --bundles nsis

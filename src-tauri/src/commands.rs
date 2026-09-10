@@ -1,13 +1,68 @@
 use std::{collections::BTreeMap, fs};
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::{
+    discovery::DiscoveryState,
     models::*,
     music_service::{normalize_auth_path, MusicServiceState},
-    official_web_player,
-    player::{PlayerSnapshot, PlayerState},
     update_service::{self, UpdateStatus},
 };
+
+#[tauri::command]
+pub async fn record_listen(
+    discovery: State<'_, DiscoveryState>,
+    track: TrackVm,
+    event_type: String,
+) -> Result<(), String> {
+    discovery.record(&track, &event_type)
+}
+
+#[tauri::command]
+pub async fn get_discover_weekly(
+    music: State<'_, MusicServiceState>,
+    discovery: State<'_, DiscoveryState>,
+    limit: Option<usize>,
+) -> Result<Vec<TrackVm>, String> {
+    let limit = limit.unwrap_or(30).clamp(1, 50);
+    let artists = discovery.top_artists(6)?;
+    if artists.is_empty() {
+        return discovery.ranked_tracks(limit);
+    }
+
+    let seen = discovery.seen_ids()?;
+    let mut added = std::collections::HashSet::new();
+    let mut result = Vec::with_capacity(limit);
+
+    for artist in artists {
+        let search = match music.search(&artist).await {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let mut artist_count = 0;
+        for track in search.tracks {
+            if seen.contains(&track.video_id) || !added.insert(track.video_id.clone()) {
+                continue;
+            }
+            result.push(track);
+            artist_count += 1;
+            if artist_count == 3 || result.len() == limit {
+                break;
+            }
+        }
+        if result.len() == limit {
+            break;
+        }
+    }
+
+    if result.len() < limit {
+        for track in discovery.ranked_tracks(limit - result.len())? {
+            if added.insert(track.video_id.clone()) {
+                result.push(track);
+            }
+        }
+    }
+    Ok(result)
+}
 
 fn config_marker(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
@@ -119,8 +174,8 @@ pub async fn configure_auth(
 ) -> Result<AuthStatus, String> {
     let path = normalize_auth_path(&path)?;
     let status = music.configure(path.clone()).await?;
-    fs::write(config_marker(&app)?, path.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
-    official_web_player::reset(&app);
+    fs::write(config_marker(&app)?, path.to_string_lossy().as_bytes())
+        .map_err(|e| e.to_string())?;
     Ok(status)
 }
 
@@ -130,7 +185,6 @@ pub async fn clear_auth(
     music: State<'_, MusicServiceState>,
 ) -> Result<AuthStatus, String> {
     music.clear().await;
-    official_web_player::reset(&app);
     let _ = fs::remove_file(config_marker(&app)?);
     if let Ok(path) = managed_auth_path(&app) {
         let _ = fs::remove_file(path);
@@ -202,116 +256,6 @@ pub async fn get_lyrics(
     video_id: String,
 ) -> Result<Option<String>, String> {
     music.lyrics(&video_id).await
-}
-
-fn emit_player(app: &AppHandle, snapshot: &PlayerSnapshot) {
-    let _ = app.emit("player-state", snapshot);
-}
-
-#[tauri::command]
-pub async fn get_player_state(
-    app: AppHandle,
-    player: State<'_, PlayerState>,
-) -> Result<PlayerSnapshot, String> {
-    match official_web_player::status(&app).await {
-        Ok(Some(media)) => Ok(player.sync_web(&media).await),
-        Ok(None) | Err(_) => Ok(player.snapshot().await),
-    }
-}
-
-#[tauri::command]
-pub async fn queue_track(
-    app: AppHandle,
-    player: State<'_, PlayerState>,
-    track: TrackVm,
-    play_now: bool,
-) -> Result<PlayerSnapshot, String> {
-    let volume = player.snapshot().await.volume;
-    if let Err(error) = official_web_player::load_track(&app, &track.video_id, play_now, volume).await {
-        let snapshot = player.playback_error(error.clone()).await;
-        emit_player(&app, &snapshot);
-        return Err(error);
-    }
-
-    let snapshot = player.queue_track(track, play_now).await;
-    emit_player(&app, &snapshot);
-    Ok(snapshot)
-}
-
-#[tauri::command]
-pub async fn player_control(
-    app: AppHandle,
-    player: State<'_, PlayerState>,
-    action: String,
-    value: Option<f64>,
-) -> Result<PlayerSnapshot, String> {
-    let snapshot = match action.as_str() {
-        "next" | "previous" => {
-            let direction = if action == "next" { 1 } else { -1 };
-            if let Some((index, track, autoplay)) = player.adjacent_target(direction).await {
-                let volume = player.snapshot().await.volume;
-                official_web_player::load_track(&app, &track.video_id, autoplay, volume).await?;
-                player.activate_index(index, track, autoplay).await
-            } else {
-                player.snapshot().await
-            }
-        }
-        "play_pause" | "play" | "pause" => {
-            official_web_player::control(&app, &action, None)?;
-            player.control_simple(&action, None).await
-        }
-        "seek" => {
-            let seconds = value.ok_or_else(|| "Seek requires a position.".to_string())?;
-            official_web_player::control(&app, "seek", Some(seconds))?;
-            player.control_simple("seek", Some(seconds)).await
-        }
-        "volume" => {
-            let volume = value.ok_or_else(|| "Volume requires a value.".to_string())?;
-            official_web_player::control(&app, "volume", Some(volume))?;
-            player.control_simple("volume", Some(volume)).await
-        }
-        _ => player.control_simple(&action, value).await,
-    };
-
-    emit_player(&app, &snapshot);
-    Ok(snapshot)
-}
-
-// Compatibility command for frontends from the pre-0.4 playback implementation.
-#[tauri::command]
-pub async fn sync_playback(
-    app: AppHandle,
-    player: State<'_, PlayerState>,
-    position: f64,
-    duration: f64,
-    is_playing: bool,
-    volume: f64,
-) -> Result<PlayerSnapshot, String> {
-    let snapshot = player
-        .sync_playback(position, duration, is_playing, volume)
-        .await;
-    emit_player(&app, &snapshot);
-    Ok(snapshot)
-}
-
-#[tauri::command]
-pub async fn playback_error(
-    app: AppHandle,
-    player: State<'_, PlayerState>,
-    message: String,
-) -> Result<PlayerSnapshot, String> {
-    let snapshot = player.playback_error(message).await;
-    emit_player(&app, &snapshot);
-    Ok(snapshot)
-}
-
-#[tauri::command]
-pub async fn open_mini_player(app: AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("mini") {
-        window.show().map_err(|e| e.to_string())?;
-        window.set_focus().map_err(|e| e.to_string())?;
-    }
-    Ok(())
 }
 
 #[tauri::command]

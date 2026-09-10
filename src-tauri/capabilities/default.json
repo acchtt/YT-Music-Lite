@@ -1,10 +1,7 @@
 {
   "identifier": "default",
   "description": "Local application windows",
-  "windows": [
-    "main",
-    "mini"
-  ],
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "core:window:allow-minimize",

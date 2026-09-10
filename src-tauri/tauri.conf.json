@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "YTM Desktop",
-  "version": "0.4.0",
-  "identifier": "com.ytmdesktop.app",
+  "productName": "YT Music Lite",
+  "version": "7.0.0",
+  "identifier": "com.ytmusiclite.windows",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,36 +14,19 @@
     "windows": [
       {
         "label": "main",
-        "title": "YTM Desktop",
+        "title": "YT Music Lite",
         "width": 1180,
         "height": 760,
-        "minWidth": 860,
-        "minHeight": 560,
+        "minWidth": 980,
+        "minHeight": 620,
         "decorations": false,
         "transparent": false,
         "resizable": true,
-        "center": true,
-        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
-      },
-      {
-        "label": "mini",
-        "title": "YTM Mini Player",
-        "url": "index.html",
-        "width": 390,
-        "height": 184,
-        "minWidth": 330,
-        "minHeight": 168,
-        "decorations": false,
-        "transparent": false,
-        "resizable": false,
-        "alwaysOnTop": true,
-        "visible": false,
-        "skipTaskbar": true,
-        "additionalBrowserArgs": "--autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com; connect-src 'self' ipc: http://ipc.localhost https://www.youtube.com; img-src 'self' asset: https: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
     }
   },
   "bundle": {

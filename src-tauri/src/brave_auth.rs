@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::Command,
     sync::Arc,
@@ -120,7 +119,10 @@ fn find_brave() -> Result<PathBuf, String> {
         }
     }
 
-    Err("Brave Browser was not found. Install Brave, then try Sign in with Google again.".to_string())
+    Err(
+        "Brave Browser was not found. Install Brave, then try Sign in with Google again."
+            .to_string(),
+    )
 }
 
 fn bridge_token() -> String {
@@ -506,11 +508,26 @@ pub async fn poll_brave_login(
 
     let path = managed_auth_path(&app)?;
     let mut auth_json = Map::<String, Value>::new();
-    auth_json.insert("Cookie".into(), Value::String(captured.cookie_header.clone()));
-    auth_json.insert("Origin".into(), Value::String("https://music.youtube.com".into()));
-    auth_json.insert("X-Origin".into(), Value::String("https://music.youtube.com".into()));
-    auth_json.insert("Referer".into(), Value::String("https://music.youtube.com/".into()));
-    auth_json.insert("X-Goog-AuthUser".into(), Value::String(captured.auth_user.clone()));
+    auth_json.insert(
+        "Cookie".into(),
+        Value::String(captured.cookie_header.clone()),
+    );
+    auth_json.insert(
+        "Origin".into(),
+        Value::String("https://music.youtube.com".into()),
+    );
+    auth_json.insert(
+        "X-Origin".into(),
+        Value::String("https://music.youtube.com".into()),
+    );
+    auth_json.insert(
+        "Referer".into(),
+        Value::String("https://music.youtube.com/".into()),
+    );
+    auth_json.insert(
+        "X-Goog-AuthUser".into(),
+        Value::String(captured.auth_user.clone()),
+    );
 
     if let Some(page_id) = captured.page_id.as_ref() {
         auth_json.insert("X-Goog-PageId".into(), Value::String(page_id.clone()));

@@ -1,37 +1,25 @@
-# Playback provider (Milestone 0.2.2)
+# Playback — Windows version 7
 
-Playback is now separate from the YouTube Music data/auth service.
+The main Svelte layout owns one persistent `PlayerBridge`. It loads the YouTube IFrame Player API once and exposes play, pause, seek, volume, previous, and next through the local player store.
 
 ```text
-Track selected in React
-       ↓
-queue_track
-       ↓
-Rust PlaybackResolver
-       ↓
-RustyPipe player query
-       ↓
-short-lived non-DRM audio stream URL
-       ↓
-main-window HTMLAudioElement
-       ↓
-sync_playback → Rust PlayerState → main + mini player
+track selected
+  → queue/store update
+  → PlayerBridge.load(videoId)
+  → YouTube IFrame state events
+  → transport and progress UI
+  → SQLite listening event
 ```
 
-The provider streams media directly for playback. It does not implement download/save/export features.
+The 200px player surface stays visible in the Now Playing panel. A timer checks the native Windows minimize state and pauses playback when minimized. The title-bar minimize action pauses immediately as well.
 
-## Stream selection
+## Packaged-build gate
 
-The resolver requests the iOS/Android YouTube player clients because RustyPipe documents those clients as returning unobfuscated stream URLs. It prefers the highest-bitrate non-DRM `audio/mp4` stream for WebView2 compatibility and falls back to another non-DRM audio stream when needed.
+Before release, verify on Windows that:
 
-## Known limitations in 0.2
-
-- Stream URLs expire and are re-resolved when changing tracks, but long multi-hour pauses do not yet proactively refresh the current URL.
-- DRM-only tracks are reported as unsupported by the current provider.
-- Gapless playback, crossfade, ReplayGain/normalization and pre-buffering the next item are later milestones.
-- Queue population is currently click-driven; radio/autoplay queue expansion comes next.
-
-
-## 0.2.2 transport path
-
-The WebView no longer requests the resolved googlevideo URL directly. The Rust backend stores the remote URL and the matching RustyPipe client user-agent, then exposes a local `ytmstream` custom protocol. Range requests are forwarded with the expected User-Agent, Origin and Referer headers. This avoids client-UA mismatch and gives the app one place to refresh expired stream URLs.
+1. WebView2 loads `https://www.youtube.com/iframe_api` under the production CSP.
+2. Playback starts from a user click.
+3. Seek, volume, next, and previous work.
+4. Minimize pauses within one second.
+5. The player request includes the required identifying referrer/origin.
+6. Median private working set remains below 200 MB during the standard measurement run.

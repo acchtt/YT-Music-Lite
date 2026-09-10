@@ -1,8 +1,8 @@
 [package]
-name = "ytm_desktop_option3"
-version = "0.4.0"
-description = "Custom standalone YouTube Music desktop client"
-authors = ["YTM Desktop"]
+name = "yt-music-lite"
+version = "7.0.0"
+description = "Low-memory YouTube Music client for Windows"
+authors = ["YT Music Lite"]
 edition = "2021"
 
 [lib]
@@ -23,3 +23,4 @@ axum = { version = "0.8", default-features = false, features = ["http1", "tokio"
 semver = "1"
 sha2 = "0.10"
 futures-util = "0.3"
+rusqlite = { version = "0.32", features = ["bundled"] }

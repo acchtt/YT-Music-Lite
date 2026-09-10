@@ -1,80 +1,39 @@
-# YTM Desktop architecture — Milestone 0.2
+# YT Music Lite 7 architecture
 
-## Runtime components
+## Scope
 
-```text
-┌────────────────────────────────────────────────────────────┐
-│ React / TypeScript                                         │
-│                                                            │
-│ Home  Search  Library  Settings                            │
-│                 │                                          │
-│ Bottom Player ──┼──────────── Mini Player                  │
-│                 │                ▲                          │
-│          useAudioEngine             shared player events   │
-└─────────────────┼──────────────────────────────────────────┘
-                  │ Tauri IPC
-┌─────────────────▼──────────────────────────────────────────┐
-│ Rust / Tauri                                               │
-│                                                            │
-│ MusicServiceState                                          │
-│   browser.json → ytmusic-api → account data               │
-│                                                            │
-│ PlaybackResolverState                                      │
-│   video id → RustyPipe → short-lived audio stream         │
-│                                                            │
-│ PlayerState                                                │
-│   queue/current/play state/position/volume                 │
-│                                                            │
-│ UpdateService                                              │
-│   signed HTTPS manifest → download → verify → install      │
-└────────────────────────────────────────────────────────────┘
-```
-
-## Separation rules
-
-1. React never receives the contents of `browser.json`.
-2. Account-data calls stay in `MusicServiceState`.
-3. Stream resolution stays in `PlaybackResolverState`, so it can be replaced without changing Home/Search/Library.
-4. Only the main window owns the audio element. The mini-player is a controller/view over Rust `PlayerState`, preventing two windows from playing the same track simultaneously.
-5. Update packages must pass Tauri signature verification before installation.
-
-## Playback state flow
+Version 7 targets Windows 10 and Windows 11 only. Tauri hosts one Svelte application in one WebView2 process. The previous React mini-player and hidden playback window have been removed from the active build.
 
 ```text
-click TrackCard
-  → queue_track(track, true)
-  → resolve stream
-  → PlayerState(streamUrl, isPlaying=true)
-  → player-state event
-  → useAudioEngine loads stream
-  → timeupdate/play/pause events
-  → sync_playback(...)
-  → PlayerState
-  → player-state event to main + mini
+Svelte shell
+  ├─ Home, Search, Library, Weekly Mix
+  ├─ queue and transport state
+  └─ persistent visible YouTube IFrame player
+             │
+             ├─ YouTube IFrame Player API
+             └─ Tauri commands
+                    ├─ YouTube Music catalog/account adapter
+                    ├─ SQLite listening history
+                    └─ signed update service
 ```
 
-## Updates
+## Memory rules
 
-The app has a fixed stable update source at `acchtt/YTM-Desktop` GitHub Releases. No per-user update URL or signing key is entered in Settings.
+1. Only the main WebView is persistent.
+2. The sign-in WebView exists only during authentication.
+3. Artwork uses browser lazy loading and no unbounded JavaScript image cache.
+4. Search waits 320 ms and ignores empty requests.
+5. SQLite connections are short-lived and use WAL with normal synchronization.
+6. No Node, Python, mpv, yt-dlp, or Deno process runs with the app.
+7. The Windows release fails QA when its median private working set exceeds 200 MB.
 
-```text
-Settings > Check for updates
-        ↓
-GitHub Releases API
-        ↓
-newer app-vX.Y.Z?
-        ↓
-Windows *-setup.exe + matching .sha256
-        ↓
-Rust download + progress
-        ↓
-SHA-256 verification
-        ↓
-wait for YTM Desktop to exit
-        ↓
-NSIS /S
-        ↓
-relaunch installed build
-```
+## Discovery
 
-The GitHub Actions workflow builds the NSIS bundle and publishes the checksum automatically for every `app-v*` tag. This updater is intentionally separate from the YouTube Music account/session and playback services.
+Playback writes compact `play`, `complete`, and `skip` events to `%LocalAppData%`. Weekly Mix ranks favorite artists, fetches a small candidate set, excludes already-heard tracks, caps each artist at three candidates, and falls back to highly scored familiar tracks.
+
+## Data and security boundaries
+
+- Session material remains in the Rust side and is never returned to Svelte.
+- The frontend receives normalized view models only.
+- Playback uses the supported embedded YouTube player instead of resolved stream URLs.
+- Playback pauses when the app is hidden or minimized.
