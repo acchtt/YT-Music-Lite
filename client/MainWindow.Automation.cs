@@ -41,6 +41,9 @@ namespace YTMusicLite.Client
                 Assert(YtDlpOptions.Authentication(clientSettings).Contains("brave:C:\\Auth Profile\\Default"), "Dedicated Brave profile arguments");
                 Assert(BrowserAccessValidator.HasAccountCookie(".youtube.com\tTRUE\t/\tTRUE\t0\tSAPISID\tsecret"), "Authenticated cookie detection");
                 Assert(!BrowserAccessValidator.HasAccountCookie(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\tplain"), "Anonymous cookie rejection");
+                AccountSyncService syncParser = new AccountSyncService(clientSettings);
+                List<Track> synced = syncParser.Parse("{\"id\":\"liked-1\",\"title\":\"Liked song\",\"artist\":\"Test artist\",\"duration\":123}");
+                Assert(synced.Count == 1 && synced[0].Id == "liked-1" && synced[0].Artist == "Test artist", "Account library parsing");
                 Assert(BrowserSignIn.Arguments("brave").Contains("--new-window") && BrowserSignIn.Arguments("brave").Contains("accounts.google.com"), "Brave sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("edge").Contains("--new-window") && BrowserSignIn.Arguments("edge").Contains("accounts.google.com"), "Edge sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("firefox").Contains("-new-window") && BrowserSignIn.Arguments("firefox").Contains("accounts.google.com"), "Firefox sign-in launch arguments");

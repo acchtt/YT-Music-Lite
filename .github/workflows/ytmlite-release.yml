@@ -59,11 +59,11 @@ jobs:
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v6.0.3
+          tag_name: ytmlite-v6.0.4
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v6.0.3
+          name: YT Music Lite v6.0.4
           body: |
-            YT Music Lite v6.0.3
+            YT Music Lite v6.0.4
 
             - Replaces every previous client with one clean Windows-native architecture.
             - Adds complete Home, Search, Library, Playlists, Queue, and Settings navigation.
@@ -73,6 +73,7 @@ jobs:
             - Browser sign-in buttons open the Google account chooser and provide clear completion guidance.
             - Adds Brave sign-in, cookie access, browser detection, and automated regression coverage.
             - Waits for Brave sign-in to finish and verifies authenticated account cookies before reporting Connected.
+            - Syncs up to 250 liked YouTube Music songs into the native Library after sign-in, with a manual refresh action.
           files: |
-            client/release/YTMusicLite-v6.0.3-win-x64.zip
-            client/release/YTMusicLite-v6.0.3-win-x64.zip.sha256
+            client/release/YTMusicLite-v6.0.4-win-x64.zip
+            client/release/YTMusicLite-v6.0.4-win-x64.zip.sha256
