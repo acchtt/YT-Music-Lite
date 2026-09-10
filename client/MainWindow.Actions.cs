@@ -528,7 +528,7 @@ namespace YTMusicLite.Client
             {
                 clientSettings.AccessVerified = true;
                 SaveAccessSettings();
-                MessageBox.Show(this, "Brave is connected. YT Music Lite can now use this account for playback.", "Sign-in complete", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await SyncAccountAsync(true);
             }
             else
             {
@@ -538,6 +538,50 @@ namespace YTMusicLite.Client
                 youtubeAccessTitle.Text = "Brave sign-in failed";
                 youtubeAccessBody.Text = error;
                 MessageBox.Show(this, error, "Sign-in was not completed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private async void SyncAccount()
+        {
+            await SyncAccountAsync(false);
+        }
+
+        private async Task SyncAccountAsync(bool afterSignIn)
+        {
+            if (!clientSettings.AccessVerified)
+            {
+                string message = "Sign in with Brave and wait for Connected before syncing your library.";
+                statusLabel.Text = message;
+                MessageBox.Show(this, message, "Account sync", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            statusLabel.Text = "Syncing liked songs…";
+            youtubeAccessBody.Text = "Connected. Loading liked songs from YouTube Music…";
+            try
+            {
+                List<Track> tracks = await new AccountSyncService(clientSettings).LoadLikedSongsAsync();
+                int added = 0;
+                foreach (Track track in tracks)
+                {
+                    if (library.SavedTracks.Any(item => LibraryStore.SameTrack(item, track))) continue;
+                    library.SavedTracks.Add(track);
+                    added++;
+                }
+                if (!automation) store.Save(library);
+                statusLabel.Text = "Synced " + tracks.Count + " liked songs";
+                youtubeAccessBody.Text = "Connected and synced. Use Sync to refresh your liked songs.";
+                Navigate(AppPage.Library, null, true);
+                MessageBox.Show(this,
+                    "Connected successfully. " + tracks.Count + " liked songs were found" + (added > 0 ? " and " + added + " were added to your Library." : ". Your Library is already up to date."),
+                    afterSignIn ? "Sign-in complete" : "Account sync complete",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception error)
+            {
+                statusLabel.Text = "Account sync failed: " + error.Message;
+                youtubeAccessBody.Text = error.Message;
+                MessageBox.Show(this, error.Message, "Account sync failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 

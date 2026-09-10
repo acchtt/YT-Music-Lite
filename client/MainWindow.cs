@@ -317,11 +317,12 @@ namespace YTMusicLite.Client
             accessButtons.Controls.Add(SettingsButton("Chrome", delegate { SetBrowserAccess("chrome"); }));
             accessButtons.Controls.Add(SettingsButton("Firefox", delegate { SetBrowserAccess("firefox"); }));
             accessButtons.Controls.Add(SettingsButton("cookies.txt", ImportCookies));
+            accessButtons.Controls.Add(SettingsButton("Sync", SyncAccount));
             accessButtons.Controls.Add(SettingsButton("Clear", ClearAccess));
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.3", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.4", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };
@@ -334,7 +335,7 @@ namespace YTMusicLite.Client
 
         private PillButton SettingsButton(string label, Action action)
         {
-            PillButton button = new PillButton { Label = label, Width = label == "cookies.txt" ? 112 : 88, Height = 36, Margin = new Padding(4, 0, 4, 0), AccessibleName = label };
+            PillButton button = new PillButton { Label = label, Width = label == "cookies.txt" ? 106 : 80, Height = 36, Margin = new Padding(4, 0, 4, 0), AccessibleName = label };
             button.Click += delegate { action(); };
             return button;
         }
