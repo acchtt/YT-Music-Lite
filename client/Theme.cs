@@ -72,16 +72,16 @@ namespace YTMusicLite.Client
 
     internal static class IconPainter
     {
+        private static readonly Font Glyph16 = new Font("Segoe MDL2 Assets", 16f, FontStyle.Regular, GraphicsUnit.Pixel);
+        private static readonly Font Glyph20 = new Font("Segoe MDL2 Assets", 20f, FontStyle.Regular, GraphicsUnit.Pixel);
+        private static readonly StringFormat GlyphFormat = CreateGlyphFormat();
+
         public static void Draw(Graphics graphics, AppIcon icon, Rectangle bounds, Color color, float width)
         {
             string glyph = SystemGlyph(icon);
             if (!string.IsNullOrEmpty(glyph))
             {
-                float size = Math.Min(bounds.Width, bounds.Height) <= 20 ? 16f : 20f;
-                using (Font font = new Font("Segoe MDL2 Assets", size, FontStyle.Regular, GraphicsUnit.Pixel))
-                {
-                    TextRenderer.DrawText(graphics, glyph, font, bounds, color, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
-                }
+                using (SolidBrush brush = new SolidBrush(color)) graphics.DrawString(glyph, Math.Min(bounds.Width, bounds.Height) <= 20 ? Glyph16 : Glyph20, brush, bounds, GlyphFormat);
                 return;
             }
             Theme.EnableQuality(graphics);
@@ -154,6 +154,15 @@ namespace YTMusicLite.Client
                 }
             }
             graphics.Restore(state);
+        }
+
+        private static StringFormat CreateGlyphFormat()
+        {
+            StringFormat format = new StringFormat(StringFormat.GenericTypographic);
+            format.Alignment = StringAlignment.Center;
+            format.LineAlignment = StringAlignment.Center;
+            format.FormatFlags |= StringFormatFlags.NoWrap;
+            return format;
         }
 
         private static string SystemGlyph(AppIcon icon)
