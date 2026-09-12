@@ -13,6 +13,7 @@ namespace YTMusicLite.Client
         public int Volume { get; set; }
         public bool Shuffle { get; set; }
         public string RepeatMode { get; set; }
+        public DateTime LastAccountSyncUtc { get; set; }
 
         public ClientSettings()
         {

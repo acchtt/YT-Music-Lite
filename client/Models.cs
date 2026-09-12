@@ -26,6 +26,9 @@ namespace YTMusicLite.Client
         public string Id { get; set; }
         public string Name { get; set; }
         public string SourceUrl { get; set; }
+        public string ThumbnailUrl { get; set; }
+        public int TrackCount { get; set; }
+        public bool TracksLoaded { get; set; }
         public bool IsRemote { get; set; }
         public DateTime CreatedUtc { get; set; }
         public DateTime LastSyncedUtc { get; set; }
@@ -34,6 +37,7 @@ namespace YTMusicLite.Client
         public Playlist()
         {
             Tracks = new List<Track>();
+            TracksLoaded = true;
         }
     }
 
@@ -49,7 +53,7 @@ namespace YTMusicLite.Client
 
         public LibraryData()
         {
-            SchemaVersion = 3;
+            SchemaVersion = 4;
             SavedTracks = new List<Track>();
             Playlists = new List<Playlist>();
             RecentTracks = new List<Track>();

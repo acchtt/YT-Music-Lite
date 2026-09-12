@@ -54,6 +54,8 @@ namespace YTMusicLite.Client
                 AccountSyncService syncParser = new AccountSyncService(clientSettings);
                 List<Track> synced = syncParser.Parse("{\"id\":\"liked-1\",\"title\":\"Liked song\",\"artist\":\"Test artist\",\"duration\":123}");
                 Assert(synced.Count == 1 && synced[0].Id == "liked-1" && synced[0].Artist == "Test artist" && synced[0].ThumbnailUrl.Contains("liked-1"), "Account library parsing");
+                List<Playlist> accountPlaylists = syncParser.ParsePlaylists("{\"entries\":[{\"id\":\"PL-owned\",\"title\":\"My YouTube mix\",\"webpage_url\":\"https://music.youtube.com/playlist?list=PL-owned\",\"playlist_count\":\"12 songs\",\"thumbnails\":[{\"url\":\"https://i.ytimg.com/vi/cover/hqdefault.jpg\"}]}]}");
+                Assert(accountPlaylists.Count == 1 && accountPlaylists[0].Id == "youtube:PL-owned" && accountPlaylists[0].TrackCount == 12 && !accountPlaylists[0].TracksLoaded && accountPlaylists[0].ThumbnailUrl.Contains("cover"), "Automatic YouTube playlist parsing");
                 Dictionary<string, object> artworkData = new Dictionary<string, object>();
                 artworkData["thumbnails"] = new object[]
                 {
@@ -101,7 +103,7 @@ namespace YTMusicLite.Client
                 Assert(miniPlayer != null, "Mini player");
                 using (Bitmap image = new Bitmap(miniPlayer.Width, miniPlayer.Height)) { miniPlayer.DrawToBitmap(image, new Rectangle(Point.Empty, miniPlayer.Size)); image.Save("client-mini.png"); }
                 miniPlayer.Close();
-                File.WriteAllText("ui-check.txt", "PASS: native navigation, discovery, playlist overview/import parsing, search, library, queue, settings, responsive layout, complete playback controls, mini player");
+                File.WriteAllText("ui-check.txt", "PASS: native navigation, automatic playlist parsing, discovery, search, library, queue, settings, responsive layout, complete playback controls, mini player");
             }
             catch (Exception error)
             {

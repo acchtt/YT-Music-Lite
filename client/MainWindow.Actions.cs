@@ -29,6 +29,10 @@ namespace YTMusicLite.Client
             backButton.Enabled = historyIndex > 0;
             forwardButton.Enabled = historyIndex >= 0 && historyIndex < history.Count - 1;
             RenderPage();
+            if (page == AppPage.Playlist && playlist != null && playlist.IsRemote && !playlist.TracksLoaded && !loadingPlaylists.Contains(playlist.Id))
+            {
+                BeginInvoke((Action)delegate { EnsurePlaylistLoaded(playlist); });
+            }
         }
 
         private void MoveHistory(int offset)
@@ -84,16 +88,16 @@ namespace YTMusicLite.Client
                     break;
                 case AppPage.Playlists:
                     heading.Text = "Playlists";
-                    subtitle.Text = library.Playlists.Count == 0 ? "Create a playlist or import one from YouTube" : library.Playlists.Count + (library.Playlists.Count == 1 ? " playlist" : " playlists");
+                    subtitle.Text = library.Playlists.Count == 0 ? "Your YouTube playlists appear automatically after sign-in" : library.Playlists.Count + (library.Playlists.Count == 1 ? " playlist" : " playlists");
                     AddAction("Create playlist", AppIcon.Add, true, CreatePlaylist);
                     AddAction("Import YouTube", AppIcon.Download, false, ImportYouTubePlaylist);
                     PopulatePlaylistGrid();
                     break;
                 case AppPage.Playlist:
                     heading.Text = currentPlaylist == null ? "Playlist" : currentPlaylist.Name;
-                    subtitle.Text = visible.Count + (visible.Count == 1 ? " song" : " songs") + (currentPlaylist != null && currentPlaylist.IsRemote ? " · YouTube snapshot" : "");
+                    subtitle.Text = currentPlaylist != null && currentPlaylist.IsRemote && !currentPlaylist.TracksLoaded ? "Loading songs from YouTube…" : visible.Count + (visible.Count == 1 ? " song" : " songs") + (currentPlaylist != null && currentPlaylist.IsRemote ? " · YouTube snapshot" : "");
                     trackList.EmptyTitle = "This playlist is empty";
-                    trackList.EmptyBody = "Use Add to playlist from Search, Discover, or Your library.";
+                    trackList.EmptyBody = currentPlaylist != null && currentPlaylist.IsRemote && !currentPlaylist.TracksLoaded ? "Fetching this playlist only when you open it keeps startup fast and memory low." : "Use Add to playlist from Search, Discover, or Your library.";
                     AddTrackActions(true);
                     AddAction("Playlist options", AppIcon.More, false, ShowCurrentPlaylistMenu);
                     break;
@@ -506,6 +510,9 @@ namespace YTMusicLite.Client
                 target.LastSyncedUtc = imported.LastSyncedUtc;
                 target.IsRemote = true;
                 target.Name = localName;
+                target.ThumbnailUrl = imported.ThumbnailUrl;
+                target.TrackCount = imported.Tracks.Count;
+                target.TracksLoaded = true;
                 if (!automation) store.Save(library);
                 RefreshPlaylistNavigation();
                 statusLabel.Text = "Playlist refreshed";
@@ -514,6 +521,40 @@ namespace YTMusicLite.Client
             catch (Exception error)
             {
                 statusLabel.Text = "Playlist refresh failed: " + error.Message;
+            }
+        }
+
+        private async void EnsurePlaylistLoaded(Playlist target)
+        {
+            if (target == null || target.TracksLoaded || string.IsNullOrWhiteSpace(target.SourceUrl) || !loadingPlaylists.Add(target.Id)) return;
+            statusLabel.Text = "Loading " + target.Name + "…";
+            try
+            {
+                Playlist imported = await new PlaylistImportService(clientSettings).ImportAsync(target.SourceUrl);
+                target.Tracks = imported.Tracks;
+                target.SourceUrl = imported.SourceUrl;
+                target.ThumbnailUrl = imported.ThumbnailUrl;
+                target.TrackCount = imported.Tracks.Count;
+                target.TracksLoaded = true;
+                target.LastSyncedUtc = imported.LastSyncedUtc;
+                if (!automation) store.Save(library);
+                statusLabel.Text = "Loaded " + target.Tracks.Count + " songs from " + target.Name;
+                RefreshPlaylistNavigation();
+                if (!closing && currentPlaylist == target) RenderPage();
+            }
+            catch (Exception error)
+            {
+                statusLabel.Text = "Playlist load failed: " + error.Message;
+                if (!closing && currentPlaylist == target)
+                {
+                    trackList.EmptyTitle = "Could not load this playlist";
+                    trackList.EmptyBody = error.Message;
+                    trackList.Invalidate();
+                }
+            }
+            finally
+            {
+                loadingPlaylists.Remove(target.Id);
             }
         }
 
@@ -532,6 +573,9 @@ namespace YTMusicLite.Client
                 existing.IsRemote = true;
                 existing.LastSyncedUtc = imported.LastSyncedUtc;
                 existing.Tracks = imported.Tracks;
+                existing.ThumbnailUrl = imported.ThumbnailUrl;
+                existing.TrackCount = imported.Tracks.Count;
+                existing.TracksLoaded = true;
             }
             if (!automation) store.Save(library);
             RefreshPlaylistNavigation();
@@ -869,55 +913,110 @@ namespace YTMusicLite.Client
 
         private async void SyncAccount()
         {
-            await SyncAccountAsync(false);
+            await SyncAccountAsync(false, false);
         }
 
         private async Task SyncAccountAsync(bool afterSignIn)
         {
+            await SyncAccountAsync(afterSignIn, false);
+        }
+
+        private async Task SyncAccountAsync(bool afterSignIn, bool quiet)
+        {
+            if (accountSyncing) return;
             if (!clientSettings.AccessVerified)
             {
                 string message = "Sign in with Brave and wait for Connected before syncing your library.";
                 statusLabel.Text = message;
-                MessageBox.Show(this, message, "Account sync", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (!quiet) MessageBox.Show(this, message, "Account sync", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            statusLabel.Text = "Syncing liked songs…";
-            youtubeAccessBody.Text = "Connected. Loading liked songs from YouTube Music…";
+            accountSyncing = true;
+            statusLabel.Text = "Syncing your YouTube playlists…";
+            youtubeAccessBody.Text = "Connected. Loading playlists and liked songs from YouTube Music…";
             try
             {
-                List<Track> tracks = await new AccountSyncService(clientSettings).LoadLikedSongsAsync();
+                AccountSyncService service = new AccountSyncService(clientSettings);
+                List<Playlist> remotePlaylists = null;
+                List<Track> tracks = null;
+                Exception playlistError = null;
+                Exception likedError = null;
+                try { remotePlaylists = await service.LoadPlaylistsAsync(); }
+                catch (Exception error) { playlistError = error; }
+                try { tracks = await service.LoadLikedSongsAsync(); }
+                catch (Exception error) { likedError = error; }
+                if (remotePlaylists == null && tracks == null) throw playlistError ?? likedError ?? new InvalidOperationException("YouTube Music did not return your library.");
+
+                int playlistCount = 0;
+                foreach (Playlist remote in remotePlaylists ?? new List<Playlist>())
+                {
+                    Playlist existing = library.Playlists.FirstOrDefault(item => string.Equals(item.Id, remote.Id, StringComparison.OrdinalIgnoreCase));
+                    if (existing == null)
+                    {
+                        library.Playlists.Add(remote);
+                        existing = remote;
+                    }
+                    else
+                    {
+                        existing.SourceUrl = remote.SourceUrl;
+                        existing.IsRemote = true;
+                        existing.LastSyncedUtc = remote.LastSyncedUtc;
+                        if (!string.IsNullOrWhiteSpace(remote.ThumbnailUrl)) existing.ThumbnailUrl = remote.ThumbnailUrl;
+                        existing.TrackCount = Math.Max(remote.TrackCount, existing.Tracks == null ? 0 : existing.Tracks.Count);
+                    }
+                    playlistCount++;
+                }
+
                 int added = 0;
-                foreach (Track track in tracks)
+                foreach (Track track in tracks ?? new List<Track>())
                 {
                     if (library.SavedTracks.Any(item => LibraryStore.SameTrack(item, track))) continue;
                     library.SavedTracks.Add(track);
                     added++;
                 }
-                Playlist liked = library.Playlists.FirstOrDefault(item => item.Id == "youtube:LM");
-                if (liked == null)
+                if (tracks != null)
                 {
-                    liked = new Playlist { Id = "youtube:LM", Name = "Liked Music", SourceUrl = "https://music.youtube.com/playlist?list=LM", IsRemote = true, CreatedUtc = DateTime.UtcNow };
-                    library.Playlists.Add(liked);
+                    Playlist liked = library.Playlists.FirstOrDefault(item => item.Id == "youtube:LM");
+                    if (liked == null)
+                    {
+                        liked = new Playlist { Id = "youtube:LM", Name = "Liked Music", SourceUrl = "https://music.youtube.com/playlist?list=LM", IsRemote = true, CreatedUtc = DateTime.UtcNow };
+                        library.Playlists.Add(liked);
+                    }
+                    liked.Tracks = new List<Track>(tracks.Select(item => item.Clone()));
+                    liked.TrackCount = liked.Tracks.Count;
+                    liked.TracksLoaded = true;
+                    liked.ThumbnailUrl = liked.Tracks.Count == 0 ? liked.ThumbnailUrl : liked.Tracks[0].ThumbnailUrl;
+                    liked.LastSyncedUtc = DateTime.UtcNow;
                 }
-                liked.Tracks = new List<Track>(tracks.Select(item => item.Clone()));
-                liked.LastSyncedUtc = DateTime.UtcNow;
-                if (!automation) store.Save(library);
+                clientSettings.LastAccountSyncUtc = DateTime.UtcNow;
+                if (!automation)
+                {
+                    store.Save(library);
+                    settingsStore.Save(clientSettings);
+                }
                 RefreshPlaylistNavigation();
-                statusLabel.Text = "Synced " + tracks.Count + " liked songs";
-                youtubeAccessBody.Text = "Connected and synced. Use Sync to refresh Liked Music and your saved songs.";
-                Navigate(AppPage.Playlist, liked, true);
-                MessageBox.Show(this,
-                    "Connected successfully. " + tracks.Count + " liked songs were added to the Liked Music playlist" + (added > 0 ? " and " + added + " were added to your Library." : ". Your Library is already up to date."),
-                    afterSignIn ? "Sign-in complete" : "Account sync complete",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                if (currentPage == AppPage.Playlists) RenderPage();
+                int likedCount = tracks == null ? 0 : tracks.Count;
+                statusLabel.Text = "Synced " + playlistCount + " playlists and " + likedCount + " liked songs";
+                youtubeAccessBody.Text = "Connected and synced automatically. Playlists refresh in the background and songs load when opened.";
+                if (!quiet)
+                {
+                    Navigate(AppPage.Playlists, null, true);
+                    string warning = playlistError == null && likedError == null ? "" : "\n\nOne part of the library could not be refreshed and the cached copy was kept.";
+                    MessageBox.Show(this,
+                        "Connected successfully. " + playlistCount + " YouTube playlists and " + likedCount + " liked songs are available" + (added > 0 ? "; " + added + " new liked songs were saved to Your Library." : ".") + warning,
+                        afterSignIn ? "Sign-in complete" : "Account sync complete",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
             }
             catch (Exception error)
             {
                 statusLabel.Text = "Account sync failed: " + error.Message;
                 youtubeAccessBody.Text = error.Message;
-                MessageBox.Show(this, error.Message, "Account sync failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (!quiet) MessageBox.Show(this, error.Message, "Account sync failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+            finally { accountSyncing = false; }
         }
 
         private void ImportCookies()
@@ -939,6 +1038,7 @@ namespace YTMusicLite.Client
             clientSettings.CookieFile = "";
             clientSettings.CookieProfile = "";
             clientSettings.AccessVerified = false;
+            clientSettings.LastAccountSyncUtc = DateTime.MinValue;
             SaveAccessSettings();
         }
 

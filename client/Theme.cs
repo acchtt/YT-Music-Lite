@@ -55,6 +55,7 @@ namespace YTMusicLite.Client
         Stop,
         Add,
         Heart,
+        HeartFilled,
         More,
         Volume,
         VolumeMuted,
@@ -73,6 +74,16 @@ namespace YTMusicLite.Client
     {
         public static void Draw(Graphics graphics, AppIcon icon, Rectangle bounds, Color color, float width)
         {
+            string glyph = SystemGlyph(icon);
+            if (!string.IsNullOrEmpty(glyph))
+            {
+                float size = Math.Min(bounds.Width, bounds.Height) <= 20 ? 16f : 20f;
+                using (Font font = new Font("Segoe MDL2 Assets", size, FontStyle.Regular, GraphicsUnit.Pixel))
+                {
+                    TextRenderer.DrawText(graphics, glyph, font, bounds, color, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+                }
+                return;
+            }
             Theme.EnableQuality(graphics);
             float scale = Math.Min(bounds.Width, bounds.Height) / 24f;
             GraphicsState state = graphics.Save();
@@ -144,6 +155,39 @@ namespace YTMusicLite.Client
             }
             graphics.Restore(state);
         }
+
+        private static string SystemGlyph(AppIcon icon)
+        {
+            switch (icon)
+            {
+                case AppIcon.Home: return "\uE80F";
+                case AppIcon.Search: return "\uE721";
+                case AppIcon.Library: return "\uE8F1";
+                case AppIcon.Playlist:
+                case AppIcon.Queue: return "\uE8FD";
+                case AppIcon.Settings: return "\uE713";
+                case AppIcon.Play: return "\uE768";
+                case AppIcon.Pause: return "\uE769";
+                case AppIcon.Previous: return "\uE892";
+                case AppIcon.Next: return "\uE893";
+                case AppIcon.Stop: return "\uE71A";
+                case AppIcon.Add: return "\uE710";
+                case AppIcon.Heart: return "\uEB51";
+                case AppIcon.HeartFilled: return "\uEB52";
+                case AppIcon.More: return "\uE712";
+                case AppIcon.Volume: return "\uE767";
+                case AppIcon.VolumeMuted: return "\uE74F";
+                case AppIcon.Shuffle: return "\uE8B1";
+                case AppIcon.Repeat: return "\uE8EE";
+                case AppIcon.RepeatOne: return "\uE8ED";
+                case AppIcon.Close: return "\uE711";
+                case AppIcon.Back: return "\uE72B";
+                case AppIcon.Forward: return "\uE72A";
+                case AppIcon.Download: return "\uE896";
+                case AppIcon.Check: return "\uE73E";
+                default: return "";
+            }
+        }
     }
 
     internal sealed class IconButton : Control
@@ -174,7 +218,8 @@ namespace YTMusicLite.Client
             if (pressed) background = Theme.SurfaceSelected;
             if (background.A > 0) using (SolidBrush brush = new SolidBrush(background)) using (GraphicsPath path = Theme.Rounded(new Rectangle(1, 1, Width - 2, Height - 2), Height / 2)) e.Graphics.FillPath(brush, path);
             Color foreground = Accent ? Color.White : (Enabled ? Theme.Text : Theme.Faint);
-            IconPainter.Draw(e.Graphics, Icon, new Rectangle((Width - 22) / 2, (Height - 22) / 2, 22, 22), foreground, 1.8f);
+            AppIcon paintedIcon = Icon == AppIcon.Heart && Checked ? AppIcon.HeartFilled : Icon;
+            IconPainter.Draw(e.Graphics, paintedIcon, new Rectangle((Width - 22) / 2, (Height - 22) / 2, 22, 22), foreground, 1.8f);
         }
     }
 

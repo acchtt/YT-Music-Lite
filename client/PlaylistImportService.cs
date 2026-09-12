@@ -77,6 +77,9 @@ namespace YTMusicLite.Client
                 });
             }
             if (result.Tracks.Count == 0) throw new InvalidOperationException("No playable songs were found in this playlist.");
+            result.TracksLoaded = true;
+            result.TrackCount = result.Tracks.Count;
+            result.ThumbnailUrl = result.Tracks[0].ThumbnailUrl;
             return result;
         }
 

@@ -23,6 +23,7 @@ namespace YTMusicLite.Client
         private readonly bool silentPlayback;
         private readonly string benchmarkSource;
         private readonly List<Track> queue = new List<Track>();
+        private readonly HashSet<string> loadingPlaylists = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<AppPage, NavButton> navigationButtons = new Dictionary<AppPage, NavButton>();
         private readonly List<PageTarget> history = new List<PageTarget>();
         private int historyIndex = -1;
@@ -76,6 +77,7 @@ namespace YTMusicLite.Client
         private bool searching;
         private bool closing;
         private bool updatingProgress;
+        private bool accountSyncing;
 
         public MainWindow(string[] args)
         {
@@ -108,6 +110,7 @@ namespace YTMusicLite.Client
             KeyDown += MainKeyDown;
             if (automation) Shown += delegate { BeginInvoke((Action)RunUiCheck); };
             else if (!string.IsNullOrEmpty(benchmarkSource)) Shown += delegate { BeginInvoke((Action)RunBenchmark); };
+            else if (clientSettings.AccessVerified && clientSettings.LastAccountSyncUtc < DateTime.UtcNow.AddHours(-6)) Shown += async delegate { await SyncAccountAsync(false, true); };
         }
 
         private void BuildWindow()
@@ -284,7 +287,7 @@ namespace YTMusicLite.Client
             playerArtist = new Label { Text = "Choose something from Home or Search", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.TopLeft, AutoEllipsis = true };
             statusLabel = new Label { Text = "Ready", Dock = DockStyle.Fill, ForeColor = Theme.Faint, Font = new Font("Segoe UI", 8), TextAlign = ContentAlignment.TopLeft, AutoEllipsis = true };
             info.Controls.Add(playerTitle, 1, 0); info.Controls.Add(playerArtist, 1, 1); info.Controls.Add(statusLabel, 1, 2);
-            saveButton = new IconButton { Icon = AppIcon.Heart, AccessibleName = "Save song", Dock = DockStyle.Fill };
+            saveButton = new IconButton { Icon = AppIcon.Heart, AccessibleName = "Save song", Anchor = AnchorStyles.None, Margin = Padding.Empty };
             saveButton.Click += delegate { ToggleSaveCurrent(); };
             info.Controls.Add(saveButton, 2, 0); info.SetRowSpan(saveButton, 3);
             columns.Controls.Add(info, 0, 0);
@@ -350,7 +353,7 @@ namespace YTMusicLite.Client
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.2.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.2.1", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };

@@ -150,8 +150,15 @@ namespace YTMusicLite.Client
             {
                 if (playlist.Tracks == null) playlist.Tracks = new List<Track>();
                 foreach (Track track in playlist.Tracks) YouTubeArtwork.Ensure(track);
+                if (playlist.Tracks.Count > 0)
+                {
+                    playlist.TracksLoaded = true;
+                    playlist.TrackCount = playlist.Tracks.Count;
+                    if (string.IsNullOrWhiteSpace(playlist.ThumbnailUrl)) playlist.ThumbnailUrl = playlist.Tracks[0].ThumbnailUrl;
+                }
+                else if (!playlist.IsRemote) playlist.TracksLoaded = true;
             }
-            data.SchemaVersion = 3;
+            data.SchemaVersion = 4;
         }
 
         public static bool SameTrack(Track left, Track right)
