@@ -50,7 +50,9 @@ try {
     $totals | Export-Csv "$root/build/memory-totals.csv" -NoTypeInformation
     $peak = ($totals | Measure-Object WorkingSetMiB -Maximum).Maximum
     $idlePeak = ($totals | Where-Object { $_.Seconds -lt 1.5 } | Measure-Object WorkingSetMiB -Maximum).Maximum
-    $releasedPeak = ($totals | Where-Object { $_.Seconds -gt 10 } | Measure-Object WorkingSetMiB -Maximum).Maximum
+    $lastSample = ($totals | Measure-Object Seconds -Maximum).Maximum
+    $releasedStart = [Math]::Max(0, $lastSample - 1.25)
+    $releasedPeak = ($totals | Where-Object { $_.Seconds -ge $releasedStart } | Measure-Object WorkingSetMiB -Maximum).Maximum
     if ($peak -gt 140) { throw "Combined client and player memory exceeded 140 MiB: $peak MiB" }
     if ($idlePeak -gt 80) { throw "Idle client memory exceeded 80 MiB: $idlePeak MiB" }
     if ($releasedPeak -gt 80) { throw "Memory after Stop exceeded 80 MiB: $releasedPeak MiB" }
