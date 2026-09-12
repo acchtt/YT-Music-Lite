@@ -42,6 +42,7 @@ namespace YTMusicLite.Client
     internal enum AppIcon
     {
         Home,
+        Discover,
         Search,
         Library,
         Playlist,
@@ -89,6 +90,8 @@ namespace YTMusicLite.Client
                         graphics.DrawLines(pen, new PointF[] { new PointF(3, 11), new PointF(12, 3), new PointF(21, 11) });
                         graphics.DrawLines(pen, new PointF[] { new PointF(5, 10), new PointF(5, 21), new PointF(19, 21), new PointF(19, 10) });
                         graphics.DrawLine(pen, 10, 21, 10, 15); graphics.DrawLine(pen, 14, 21, 14, 15); break;
+                    case AppIcon.Discover:
+                        graphics.FillPolygon(brush, new PointF[] { new PointF(12, 2), new PointF(14, 9), new PointF(22, 12), new PointF(14, 15), new PointF(12, 22), new PointF(10, 15), new PointF(2, 12), new PointF(10, 9) }); graphics.FillEllipse(brush, 11, 11, 2, 2); break;
                     case AppIcon.Search:
                         graphics.DrawEllipse(pen, 4, 4, 11, 11); graphics.DrawLine(pen, 14, 14, 21, 21); break;
                     case AppIcon.Library:

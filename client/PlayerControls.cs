@@ -118,4 +118,44 @@ namespace YTMusicLite.Client
             using (Font artist = new Font("Segoe UI", 8.3f)) TextRenderer.DrawText(e.Graphics, track.Artist ?? "Unknown artist", artist, new Rectangle(80, 39, Width - 92, 20), Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
     }
+
+    internal sealed class PlaylistCard : Control
+    {
+        private bool hovered;
+        public Playlist Playlist { get; set; }
+
+        public PlaylistCard()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Selectable, true);
+            Width = 270;
+            Height = 96;
+            Cursor = Cursors.Hand;
+            TabStop = true;
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { hovered = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { hovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) { OnClick(EventArgs.Empty); e.Handled = true; } base.OnKeyDown(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Theme.EnableQuality(e.Graphics);
+            using (SolidBrush background = new SolidBrush(hovered || Focused ? Theme.SurfaceSelected : Theme.Surface))
+            using (GraphicsPath path = Theme.Rounded(new Rectangle(0, 0, Width - 1, Height - 1), 13)) e.Graphics.FillPath(background, path);
+            Playlist playlist = Playlist;
+            if (playlist == null) return;
+            Rectangle art = new Rectangle(10, 10, 76, 76);
+            Track cover = playlist.Tracks == null || playlist.Tracks.Count == 0 ? null : playlist.Tracks[0];
+            Image image = cover == null ? null : ArtworkCache.Get(cover.ThumbnailUrl, delegate { try { if (IsHandleCreated) BeginInvoke((Action)Invalidate); } catch { } });
+            using (GraphicsPath clip = Theme.Rounded(art, 8))
+            {
+                e.Graphics.SetClip(clip);
+                if (image != null) e.Graphics.DrawImage(image, art); else ArtworkControl.DrawPlaceholder(e.Graphics, art, playlist.Name);
+                e.Graphics.ResetClip();
+            }
+            using (Font title = new Font("Segoe UI", 10, FontStyle.Bold)) TextRenderer.DrawText(e.Graphics, playlist.Name ?? "Untitled playlist", title, new Rectangle(101, 17, Width - 115, 25), Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            string count = (playlist.Tracks == null ? 0 : playlist.Tracks.Count) + ((playlist.Tracks != null && playlist.Tracks.Count == 1) ? " song" : " songs");
+            using (Font body = new Font("Segoe UI", 8.7f)) TextRenderer.DrawText(e.Graphics, count, body, new Rectangle(101, 43, Width - 115, 20), Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            if (playlist.IsRemote) using (Font source = new Font("Segoe UI", 7.8f, FontStyle.Bold)) TextRenderer.DrawText(e.Graphics, "YOUTUBE", source, new Rectangle(101, 65, Width - 115, 17), Theme.Accent, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        }
+    }
 }

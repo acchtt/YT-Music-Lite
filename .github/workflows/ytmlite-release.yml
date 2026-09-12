@@ -63,30 +63,31 @@ jobs:
           $Build = (Resolve-Path .\client\build).Path
           $Release = (Resolve-Path .\client\release).Path
           $MakeNsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
-          & $MakeNsis "/DVERSION=7.1.2" "/DVERSION4=7.1.2.0" "/DBUILDDIR=$Build" "/DOUTDIR=$Release" .\client\installer.nsi
+          & $MakeNsis "/DVERSION=7.2.0" "/DVERSION4=7.2.0.0" "/DBUILDDIR=$Build" "/DOUTDIR=$Release" .\client\installer.nsi
           if ($LASTEXITCODE -ne 0) { throw 'NSIS installer build failed' }
-          $Installer = Join-Path $Release 'YTMusicLite-v7.1.2-win-x64-setup.exe'
+          $Installer = Join-Path $Release 'YTMusicLite-v7.2.0-win-x64-setup.exe'
           $Hash = (Get-FileHash -Algorithm SHA256 $Installer).Hash.ToLowerInvariant()
           "$Hash  $(Split-Path $Installer -Leaf)" | Set-Content -Encoding ascii "$Installer.sha256"
 
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v7.1.2
+          tag_name: ytmlite-v7.2.0
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v7.1.2 — Artwork and icon repair
+          name: YT Music Lite v7.2.0 — Playlists and Discover Weekly
           make_latest: true
           body: |
-            YT Music Lite v7.1.2 restores song covers and sharpens the native Windows interface.
+            YT Music Lite v7.2.0 adds first-class playlists and lightweight personalized discovery to the native Windows client.
 
-            - Reads both single-thumbnail and thumbnail-array metadata returned by YouTube searches and account sync.
-            - Repairs missing artwork URLs in existing library, history, and playlist records.
-            - Discards corrupt cache entries, redownloads them, and center-crops covers without stretching.
-            - Redraws settings, heart, volume, shuffle, and repeat glyphs for clear small-size rendering.
+            - Adds dedicated Playlists and Discover navigation pages.
+            - Supports local playlist creation, renaming, deletion, and song management.
+            - Imports and refreshes YouTube playlists by URL using the existing authenticated yt-dlp layer.
+            - Syncs liked songs into a visible Liked Music playlist.
+            - Builds a Discover Weekly mix from recent plays and saved artists, cached for seven days.
             - Keeps native WinForms, audio-only mpv playback, and the 140 MiB combined memory gate.
             - Includes both a Windows installer and a portable/in-app-update ZIP.
           files: |
-            client/release/YTMusicLite-v7.1.2-win-x64.zip
-            client/release/YTMusicLite-v7.1.2-win-x64.zip.sha256
-            client/release/YTMusicLite-v7.1.2-win-x64-setup.exe
-            client/release/YTMusicLite-v7.1.2-win-x64-setup.exe.sha256
+            client/release/YTMusicLite-v7.2.0-win-x64.zip
+            client/release/YTMusicLite-v7.2.0-win-x64.zip.sha256
+            client/release/YTMusicLite-v7.2.0-win-x64-setup.exe
+            client/release/YTMusicLite-v7.2.0-win-x64-setup.exe.sha256

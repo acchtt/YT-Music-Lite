@@ -30,6 +30,9 @@ namespace YTMusicLite.Client
         private AppPage currentPage;
         private Playlist currentPlaylist;
         private List<Track> searchResults = new List<Track>();
+        private List<Track> discoveryResults = new List<Track>();
+        private bool discovering;
+        private bool discoveryAutoAttempted;
         private PlaybackSnapshot snapshot = new PlaybackSnapshot { State = PlaybackState.Stopped, Volume = 85 };
         private readonly Random random = new Random();
         private bool shuffleEnabled;
@@ -50,6 +53,7 @@ namespace YTMusicLite.Client
         private FlowLayoutPanel homeTiles;
         private RowStyle homeRow;
         private TrackListControl trackList;
+        private FlowLayoutPanel playlistGrid;
         private Panel settingsPanel;
         private Label youtubeAccessTitle;
         private Label youtubeAccessBody;
@@ -81,6 +85,7 @@ namespace YTMusicLite.Client
             silentPlayback = automation || !string.IsNullOrEmpty(benchmarkSource) || args.Any(item => string.Equals(item, "--silent", StringComparison.OrdinalIgnoreCase));
             store = new LibraryStore();
             library = automation ? new LibraryData() : store.Load();
+            discoveryResults = new List<Track>(library.DiscoveryTracks);
             settingsStore = new SettingsStore();
             clientSettings = automation ? new ClientSettings() : settingsStore.Load();
             clientSettings.Volume = Math.Max(0, Math.Min(100, clientSettings.Volume));
@@ -149,15 +154,17 @@ namespace YTMusicLite.Client
 
             Panel navigation = new Panel();
             navigation.Dock = DockStyle.Top;
-            navigation.Height = 238;
+            navigation.Height = 330;
             navigation.Padding = new Padding(0, 4, 0, 0);
             panel.Controls.Add(navigation);
             navigation.BringToFront();
 
             AddNavigation(navigation, AppPage.Settings, "Settings", AppIcon.Settings);
             AddNavigation(navigation, AppPage.Queue, "Queue", AppIcon.Queue);
+            AddNavigation(navigation, AppPage.Playlists, "Playlists", AppIcon.Playlist);
             AddNavigation(navigation, AppPage.Library, "Your library", AppIcon.Library);
             AddNavigation(navigation, AppPage.Search, "Search", AppIcon.Search);
+            AddNavigation(navigation, AppPage.Discover, "Discover", AppIcon.Discover);
             AddNavigation(navigation, AppPage.Home, "Home", AppIcon.Home);
 
             Panel playlistHeader = new Panel();
@@ -223,6 +230,8 @@ namespace YTMusicLite.Client
             trackList.ContextRequested += delegate { ShowTrackMenu(); };
             trackList.SelectionChanged += delegate { UpdateActionState(); };
             body.Controls.Add(trackList);
+            playlistGrid = new FlowLayoutPanel { Dock = DockStyle.Fill, Visible = false, AutoScroll = true, WrapContents = true, FlowDirection = FlowDirection.LeftToRight, BackColor = Theme.Window, Padding = new Padding(0, 8, 0, 8) };
+            body.Controls.Add(playlistGrid);
             settingsPanel = BuildSettingsPanel();
             body.Controls.Add(settingsPanel);
             layout.Controls.Add(body, 0, 4);
@@ -341,7 +350,7 @@ namespace YTMusicLite.Client
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.1.2", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.2.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };

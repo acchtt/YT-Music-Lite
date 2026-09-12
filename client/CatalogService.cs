@@ -19,10 +19,16 @@ namespace YTMusicLite.Client
 
         public async Task<List<Track>> SearchAsync(string query)
         {
+            return await SearchAsync(query, 30);
+        }
+
+        public async Task<List<Track>> SearchAsync(string query, int limit)
+        {
             Cancel();
             if (string.IsNullOrWhiteSpace(query)) return new List<Track>();
+            limit = Math.Max(1, Math.Min(50, limit));
             string runtime = ProcessTools.Find("deno");
-            string arguments = "--ignore-config --js-runtimes " + ProcessTools.Quote("deno:" + runtime) + YtDlpOptions.Authentication(settings) + " --flat-playlist --dump-json --no-warnings --socket-timeout 15 --retries 1 -- " + ProcessTools.Quote("ytsearch30:" + query.Trim());
+            string arguments = "--ignore-config --js-runtimes " + ProcessTools.Quote("deno:" + runtime) + YtDlpOptions.Authentication(settings) + " --flat-playlist --dump-json --no-warnings --socket-timeout 15 --retries 1 -- " + ProcessTools.Quote("ytsearch" + limit + ":" + query.Trim());
             Process process = ProcessTools.Start(ProcessTools.Find("yt-dlp"), arguments, true);
             active = process;
             Task<string> output = process.StandardOutput.ReadToEndAsync();

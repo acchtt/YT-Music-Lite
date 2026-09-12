@@ -45,8 +45,11 @@ namespace YTMusicLite.Client
         {
             actionBar.Controls.Clear();
             homeTiles.Controls.Clear();
+            trackList.EmptyTitle = "Nothing here yet";
+            trackList.EmptyBody = "Search for music or import audio from this computer.";
             settingsPanel.Visible = currentPage == AppPage.Settings;
-            trackList.Visible = currentPage != AppPage.Settings;
+            playlistGrid.Visible = currentPage == AppPage.Playlists;
+            trackList.Visible = currentPage != AppPage.Settings && currentPage != AppPage.Playlists;
             homeRow.Height = currentPage == AppPage.Home ? 96 : 0;
 
             List<Track> visible = VisibleTracks();
@@ -56,8 +59,17 @@ namespace YTMusicLite.Client
                     heading.Text = Greeting();
                     subtitle.Text = library.RecentTracks.Count > 0 ? "Pick up where you left off" : "Your music, without a browser running in the background";
                     AddAction("Play", AppIcon.Play, true, async delegate { await PlayFirstAsync(); });
+                    AddAction("Discover", AppIcon.Discover, false, delegate { Navigate(AppPage.Discover, null, true); });
                     AddAction("Import audio", AppIcon.Add, false, ImportAudio);
                     PopulateHomeTiles(visible);
+                    break;
+                case AppPage.Discover:
+                    heading.Text = "Discover Weekly";
+                    subtitle.Text = discovering ? "Building your weekly mix…" : (string.IsNullOrWhiteSpace(library.DiscoveryReason) ? "Recommendations shaped by your listening history" : library.DiscoveryReason);
+                    trackList.EmptyTitle = discovering ? "Building your mix…" : "No recommendations yet";
+                    trackList.EmptyBody = discovering ? "Using your recent plays and saved artists." : "Play or save a few songs, then refresh this page.";
+                    AddTrackActions(false);
+                    AddAction("Refresh mix", AppIcon.Discover, false, RefreshDiscovery);
                     break;
                 case AppPage.Search:
                     heading.Text = "Search";
@@ -70,10 +82,20 @@ namespace YTMusicLite.Client
                     AddTrackActions(true);
                     AddAction("Import audio", AppIcon.Add, false, ImportAudio);
                     break;
+                case AppPage.Playlists:
+                    heading.Text = "Playlists";
+                    subtitle.Text = library.Playlists.Count == 0 ? "Create a playlist or import one from YouTube" : library.Playlists.Count + (library.Playlists.Count == 1 ? " playlist" : " playlists");
+                    AddAction("Create playlist", AppIcon.Add, true, CreatePlaylist);
+                    AddAction("Import YouTube", AppIcon.Download, false, ImportYouTubePlaylist);
+                    PopulatePlaylistGrid();
+                    break;
                 case AppPage.Playlist:
                     heading.Text = currentPlaylist == null ? "Playlist" : currentPlaylist.Name;
-                    subtitle.Text = visible.Count + (visible.Count == 1 ? " song" : " songs");
+                    subtitle.Text = visible.Count + (visible.Count == 1 ? " song" : " songs") + (currentPlaylist != null && currentPlaylist.IsRemote ? " · YouTube snapshot" : "");
+                    trackList.EmptyTitle = "This playlist is empty";
+                    trackList.EmptyBody = "Use Add to playlist from Search, Discover, or Your library.";
                     AddTrackActions(true);
+                    AddAction("Playlist options", AppIcon.More, false, ShowCurrentPlaylistMenu);
                     break;
                 case AppPage.Queue:
                     heading.Text = "Queue";
@@ -86,14 +108,20 @@ namespace YTMusicLite.Client
                     subtitle.Text = "Playback, memory, and updates";
                     break;
             }
-            trackList.SetTracks(visible);
+            if (currentPage != AppPage.Playlists) trackList.SetTracks(visible);
             UpdateActionState();
             if (currentPage == AppPage.Search && !searching) searchBox.Focus();
+            if (currentPage == AppPage.Discover && !discovering && !discoveryAutoAttempted && (discoveryResults.Count == 0 || library.DiscoveryUpdatedUtc < DateTime.UtcNow.AddDays(-7)))
+            {
+                discoveryAutoAttempted = true;
+                BeginInvoke((Action)RefreshDiscovery);
+            }
         }
 
         private List<Track> VisibleTracks()
         {
             if (currentPage == AppPage.Search) return searchResults;
+            if (currentPage == AppPage.Discover) return discoveryResults;
             if (currentPage == AppPage.Library) return library.SavedTracks;
             if (currentPage == AppPage.Playlist) return currentPlaylist == null ? new List<Track>() : currentPlaylist.Tracks;
             if (currentPage == AppPage.Queue) return queue;
@@ -104,6 +132,23 @@ namespace YTMusicLite.Client
                 return combined;
             }
             return new List<Track>();
+        }
+
+        private void PopulatePlaylistGrid()
+        {
+            playlistGrid.Controls.Clear();
+            foreach (Playlist playlist in library.Playlists.OrderByDescending(item => item.LastSyncedUtc).ThenBy(item => item.Name))
+            {
+                Playlist target = playlist;
+                PlaylistCard card = new PlaylistCard { Playlist = target, Margin = new Padding(0, 0, 14, 14), AccessibleName = "Open playlist " + target.Name };
+                card.Click += delegate { Navigate(AppPage.Playlist, target, true); };
+                playlistGrid.Controls.Add(card);
+            }
+            if (playlistGrid.Controls.Count == 0)
+            {
+                Label empty = new Label { Text = "No playlists yet. Create one or import a YouTube playlist URL.", ForeColor = Theme.Muted, AutoSize = true, Padding = new Padding(0, 24, 0, 0), Margin = Padding.Empty };
+                playlistGrid.Controls.Add(empty);
+            }
         }
 
         private void PopulateHomeTiles(List<Track> tracks)
@@ -160,6 +205,45 @@ namespace YTMusicLite.Client
             {
                 searching = false;
                 if (!closing && currentPage == AppPage.Search) RenderPage();
+            }
+        }
+
+        private async void RefreshDiscovery()
+        {
+            if (discovering) return;
+            discovering = true;
+            if (currentPage == AppPage.Discover) RenderPage();
+            statusLabel.Text = "Building your weekly mix…";
+            try
+            {
+                DiscoveryPlan plan = DiscoveryPlanner.Build(library, DateTime.UtcNow);
+                List<Track> found = new List<Track>();
+                foreach (string query in plan.Queries)
+                {
+                    List<Track> batch = await catalog.SearchAsync(query, 14);
+                    foreach (Track track in batch)
+                    {
+                        if (found.Any(item => LibraryStore.SameTrack(item, track))) continue;
+                        if (library.SavedTracks.Any(item => LibraryStore.SameTrack(item, track))) continue;
+                        if (library.RecentTracks.Any(item => LibraryStore.SameTrack(item, track))) continue;
+                        found.Add(track);
+                    }
+                }
+                discoveryResults = found.Take(24).ToList();
+                library.DiscoveryTracks = new List<Track>(discoveryResults.Select(item => item.Clone()));
+                library.DiscoveryUpdatedUtc = DateTime.UtcNow;
+                library.DiscoveryReason = plan.Reason;
+                if (!automation) store.Save(library);
+                statusLabel.Text = discoveryResults.Count == 0 ? "No new recommendations found" : "Your weekly mix is ready";
+            }
+            catch (Exception error)
+            {
+                statusLabel.Text = "Discovery failed: " + error.Message;
+            }
+            finally
+            {
+                discovering = false;
+                if (!closing && currentPage == AppPage.Discover) RenderPage();
             }
         }
 
@@ -389,13 +473,114 @@ namespace YTMusicLite.Client
             Navigate(AppPage.Playlist, playlist, true);
         }
 
+        private async void ImportYouTubePlaylist()
+        {
+            string url = Prompt("Import YouTube playlist", "Paste playlist URL", "Import");
+            if (string.IsNullOrWhiteSpace(url)) return;
+            statusLabel.Text = "Importing YouTube playlist…";
+            try
+            {
+                Playlist imported = await new PlaylistImportService(clientSettings).ImportAsync(url);
+                Playlist playlist = UpsertPlaylist(imported);
+                statusLabel.Text = "Imported " + playlist.Tracks.Count + " songs";
+                Navigate(AppPage.Playlist, playlist, true);
+            }
+            catch (Exception error)
+            {
+                statusLabel.Text = error.Message;
+                MessageBox.Show(this, error.Message, "Playlist import failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private async void RefreshCurrentPlaylist()
+        {
+            Playlist target = currentPlaylist;
+            if (target == null || !target.IsRemote || string.IsNullOrWhiteSpace(target.SourceUrl)) return;
+            statusLabel.Text = "Refreshing " + target.Name + "…";
+            try
+            {
+                Playlist imported = await new PlaylistImportService(clientSettings).ImportAsync(target.SourceUrl);
+                string localName = target.Name;
+                target.Tracks = imported.Tracks;
+                target.SourceUrl = imported.SourceUrl;
+                target.LastSyncedUtc = imported.LastSyncedUtc;
+                target.IsRemote = true;
+                target.Name = localName;
+                if (!automation) store.Save(library);
+                RefreshPlaylistNavigation();
+                statusLabel.Text = "Playlist refreshed";
+                if (!closing && currentPlaylist == target) RenderPage();
+            }
+            catch (Exception error)
+            {
+                statusLabel.Text = "Playlist refresh failed: " + error.Message;
+            }
+        }
+
+        private Playlist UpsertPlaylist(Playlist imported)
+        {
+            Playlist existing = library.Playlists.FirstOrDefault(item => string.Equals(item.Id, imported.Id, StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(item.SourceUrl) && string.Equals(item.SourceUrl, imported.SourceUrl, StringComparison.OrdinalIgnoreCase)));
+            if (existing == null)
+            {
+                library.Playlists.Add(imported);
+                existing = imported;
+            }
+            else
+            {
+                existing.Name = imported.Name;
+                existing.SourceUrl = imported.SourceUrl;
+                existing.IsRemote = true;
+                existing.LastSyncedUtc = imported.LastSyncedUtc;
+                existing.Tracks = imported.Tracks;
+            }
+            if (!automation) store.Save(library);
+            RefreshPlaylistNavigation();
+            return existing;
+        }
+
+        private void RenameCurrentPlaylist()
+        {
+            if (currentPlaylist == null) return;
+            string name = Prompt("Rename playlist", currentPlaylist.Name, "Save");
+            if (string.IsNullOrWhiteSpace(name)) return;
+            if (library.Playlists.Any(item => item != currentPlaylist && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase))) { statusLabel.Text = "A playlist with that name already exists"; return; }
+            currentPlaylist.Name = name.Trim();
+            if (!automation) store.Save(library);
+            RefreshPlaylistNavigation();
+            RenderPage();
+            statusLabel.Text = "Playlist renamed";
+        }
+
+        private void DeleteCurrentPlaylist()
+        {
+            Playlist target = currentPlaylist;
+            if (target == null) return;
+            if (!automation && MessageBox.Show(this, "Delete \"" + target.Name + "\" from this PC?", "Delete playlist", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            library.Playlists.Remove(target);
+            if (!automation) store.Save(library);
+            RefreshPlaylistNavigation();
+            statusLabel.Text = "Playlist deleted";
+            Navigate(AppPage.Playlists, null, true);
+        }
+
+        private void ShowCurrentPlaylistMenu()
+        {
+            if (currentPlaylist == null) return;
+            ContextMenuStrip menu = NewMenu();
+            if (currentPlaylist.IsRemote) menu.Items.Add("Refresh from YouTube", null, delegate { RefreshCurrentPlaylist(); });
+            menu.Items.Add("Rename", null, delegate { RenameCurrentPlaylist(); });
+            menu.Items.Add("Delete from this PC", null, delegate { DeleteCurrentPlaylist(); });
+            menu.Closed += delegate { menu.Dispose(); };
+            menu.Show(Cursor.Position);
+        }
+
         private void RefreshPlaylistNavigation()
         {
             playlistNavigation.Controls.Clear();
             foreach (Playlist playlist in library.Playlists.OrderBy(item => item.Name))
             {
                 Playlist target = playlist;
-                NavButton button = new NavButton { Label = target.Name, Icon = AppIcon.Playlist, AccessibleName = "Playlist " + target.Name, Width = playlistNavigation.ClientSize.Width - 2, Tag = target.Id };
+                NavButton button = new NavButton { Label = target.Name, Icon = AppIcon.Playlist, AccessibleName = "Playlist " + target.Name, Width = Math.Max(120, playlistNavigation.ClientSize.Width - 2), Tag = target.Id };
                 button.Click += delegate { Navigate(AppPage.Playlist, target, true); };
                 playlistNavigation.Controls.Add(button);
             }
@@ -436,6 +621,7 @@ namespace YTMusicLite.Client
             menu.Items.Add(store.IsSaved(library, track) ? "Remove from library" : "Save to library", null, delegate { ToggleSaved(track); });
             ToolStripMenuItem playlistItem = new ToolStripMenuItem("Add to playlist");
             playlistItem.BackColor = Theme.Surface; playlistItem.ForeColor = Theme.Text;
+            if (library.Playlists.Count == 0) playlistItem.DropDownItems.Add("Create playlist…", null, delegate { CreatePlaylist(); });
             foreach (Playlist playlist in library.Playlists.OrderBy(item => item.Name))
             {
                 Playlist target = playlist;
@@ -487,10 +673,15 @@ namespace YTMusicLite.Client
 
         private string Prompt(string title, string placeholder)
         {
+            return Prompt(title, placeholder, "Create");
+        }
+
+        private string Prompt(string title, string placeholder, string confirmLabel)
+        {
             using (Form dialog = new Form { Text = title, Size = new Size(420, 175), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog, MinimizeBox = false, MaximizeBox = false, BackColor = Theme.Window, ForeColor = Theme.Text, Font = Font })
             {
                 TextBox field = new TextBox { Left = 20, Top = 24, Width = 364, BackColor = Theme.Surface, ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle, Text = placeholder };
-                PillButton confirm = new PillButton { Left = 266, Top = 70, Width = 118, Label = "Create", Primary = true };
+                PillButton confirm = new PillButton { Left = 266, Top = 70, Width = 118, Label = confirmLabel, Primary = true };
                 Button accept = new Button { Visible = false, DialogResult = DialogResult.OK };
                 confirm.Click += delegate { dialog.DialogResult = DialogResult.OK; dialog.Close(); };
                 dialog.Controls.Add(field); dialog.Controls.Add(confirm); dialog.Controls.Add(accept); dialog.AcceptButton = accept; field.SelectAll();
@@ -501,7 +692,12 @@ namespace YTMusicLite.Client
         private void UpdateActionState()
         {
             Track selected = trackList.SelectedTrack;
-            foreach (Control control in actionBar.Controls) control.Enabled = selected != null || Convert.ToString(control.Tag) == "Import audio" || Convert.ToString(control.Tag) == "Clear queue";
+            foreach (Control control in actionBar.Controls)
+            {
+                string label = Convert.ToString(control.Tag);
+                bool pageAction = label == "Import audio" || label == "Clear queue" || label == "Discover" || label == "Refresh mix" || label == "Create playlist" || label == "Import YouTube" || label == "Playlist options";
+                control.Enabled = selected != null || pageAction;
+            }
         }
 
         private void PlaybackSnapshotChanged(object sender, PlaybackSnapshot update)
@@ -697,12 +893,21 @@ namespace YTMusicLite.Client
                     library.SavedTracks.Add(track);
                     added++;
                 }
+                Playlist liked = library.Playlists.FirstOrDefault(item => item.Id == "youtube:LM");
+                if (liked == null)
+                {
+                    liked = new Playlist { Id = "youtube:LM", Name = "Liked Music", SourceUrl = "https://music.youtube.com/playlist?list=LM", IsRemote = true, CreatedUtc = DateTime.UtcNow };
+                    library.Playlists.Add(liked);
+                }
+                liked.Tracks = new List<Track>(tracks.Select(item => item.Clone()));
+                liked.LastSyncedUtc = DateTime.UtcNow;
                 if (!automation) store.Save(library);
+                RefreshPlaylistNavigation();
                 statusLabel.Text = "Synced " + tracks.Count + " liked songs";
-                youtubeAccessBody.Text = "Connected and synced. Use Sync to refresh your liked songs.";
-                Navigate(AppPage.Library, null, true);
+                youtubeAccessBody.Text = "Connected and synced. Use Sync to refresh Liked Music and your saved songs.";
+                Navigate(AppPage.Playlist, liked, true);
                 MessageBox.Show(this,
-                    "Connected successfully. " + tracks.Count + " liked songs were found" + (added > 0 ? " and " + added + " were added to your Library." : ". Your Library is already up to date."),
+                    "Connected successfully. " + tracks.Count + " liked songs were added to the Liked Music playlist" + (added > 0 ? " and " + added + " were added to your Library." : ". Your Library is already up to date."),
                     afterSignIn ? "Sign-in complete" : "Account sync complete",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);

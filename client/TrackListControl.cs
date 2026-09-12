@@ -16,6 +16,8 @@ namespace YTMusicLite.Client
         public event EventHandler SelectionChanged;
         public event EventHandler TrackActivated;
         public event EventHandler ContextRequested;
+        public string EmptyTitle { get; set; }
+        public string EmptyBody { get; set; }
 
         public TrackListControl()
         {
@@ -24,6 +26,8 @@ namespace YTMusicLite.Client
             ForeColor = Theme.Text;
             TabStop = true;
             AccessibleName = "Songs";
+            EmptyTitle = "Nothing here yet";
+            EmptyBody = "Search for music or import audio from this computer.";
             scroll = new VScrollBar();
             scroll.Dock = DockStyle.Right;
             scroll.SmallChange = RowHeight;
@@ -117,8 +121,8 @@ namespace YTMusicLite.Client
             e.Graphics.Clear(BackColor);
             if (items.Count == 0)
             {
-                using (Font title = new Font("Segoe UI", 13, FontStyle.Bold)) TextRenderer.DrawText(e.Graphics, "Nothing here yet", title, new Rectangle(24, 38, Width - 48, 32), Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-                using (Font body = new Font("Segoe UI", 9.5f)) TextRenderer.DrawText(e.Graphics, "Search for music or import audio from this computer.", body, new Rectangle(24, 72, Width - 48, 30), Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                using (Font title = new Font("Segoe UI", 13, FontStyle.Bold)) TextRenderer.DrawText(e.Graphics, EmptyTitle ?? "Nothing here yet", title, new Rectangle(24, 38, Width - 48, 32), Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+                using (Font body = new Font("Segoe UI", 9.5f)) TextRenderer.DrawText(e.Graphics, EmptyBody ?? "", body, new Rectangle(24, 72, Width - 48, 30), Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
                 return;
             }
 

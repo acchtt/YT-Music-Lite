@@ -141,14 +141,17 @@ namespace YTMusicLite.Client
             if (data.SavedTracks == null) data.SavedTracks = new List<Track>();
             if (data.Playlists == null) data.Playlists = new List<Playlist>();
             if (data.RecentTracks == null) data.RecentTracks = new List<Track>();
+            if (data.DiscoveryTracks == null) data.DiscoveryTracks = new List<Track>();
+            if (data.DiscoveryReason == null) data.DiscoveryReason = "";
             foreach (Track track in data.SavedTracks) YouTubeArtwork.Ensure(track);
             foreach (Track track in data.RecentTracks) YouTubeArtwork.Ensure(track);
+            foreach (Track track in data.DiscoveryTracks) YouTubeArtwork.Ensure(track);
             foreach (Playlist playlist in data.Playlists)
             {
                 if (playlist.Tracks == null) playlist.Tracks = new List<Track>();
                 foreach (Track track in playlist.Tracks) YouTubeArtwork.Ensure(track);
             }
-            data.SchemaVersion = 2;
+            data.SchemaVersion = 3;
         }
 
         public static bool SameTrack(Track left, Track right)

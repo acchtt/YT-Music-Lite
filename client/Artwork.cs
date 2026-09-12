@@ -53,7 +53,7 @@ namespace YTMusicLite.Client
                     try { File.Delete(temporary); } catch { }
                     using (WebClient client = new WebClient())
                     {
-                        client.Headers[HttpRequestHeader.UserAgent] = "Mozilla/5.0 YTMusicLite/7.1.2";
+                        client.Headers[HttpRequestHeader.UserAgent] = "Mozilla/5.0 YTMusicLite/7.2.0";
                         client.Headers[HttpRequestHeader.Accept] = "image/jpeg,image/png,image/*;q=0.8";
                         client.DownloadFile(url, temporary);
                     }

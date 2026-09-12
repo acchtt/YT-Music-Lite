@@ -19,6 +19,10 @@ namespace YTMusicLite.Client
                 library.RecentTracks.Add(first.Clone());
                 Playlist playlist = new Playlist { Id = "night-mix", Name = "Night Mix", CreatedUtc = DateTime.UtcNow, Tracks = new List<Track> { second } };
                 library.Playlists.Add(playlist);
+                discoveryResults = new List<Track> { first.Clone(), second.Clone() };
+                library.DiscoveryTracks = new List<Track>(discoveryResults);
+                library.DiscoveryUpdatedUtc = DateTime.UtcNow;
+                library.DiscoveryReason = "Based on Neon Avenue";
                 searchResults = new List<Track> { first, second };
                 queue.Add(first); queue.Add(second); queueIndex = 0;
                 RefreshPlaylistNavigation();
@@ -27,6 +31,12 @@ namespace YTMusicLite.Client
                 Assert(trackList.Items.Count == 2, "Library navigation");
                 Navigate(AppPage.Playlist, playlist, true);
                 Assert(trackList.Items.Count == 1 && heading.Text == "Night Mix", "Playlist navigation");
+                Navigate(AppPage.Playlists, null, true);
+                Assert(playlistGrid.Visible && playlistGrid.Controls.Count == 1 && heading.Text == "Playlists", "Playlist overview");
+                Navigate(AppPage.Discover, null, true);
+                Assert(trackList.Visible && trackList.Items.Count == 2 && heading.Text == "Discover Weekly", "Discovery navigation");
+                DiscoveryPlan plan = DiscoveryPlanner.Build(library, new DateTime(2026, 9, 12));
+                Assert(plan.Queries.Count > 0 && plan.Reason.Contains("Neon Avenue"), "History-based discovery planning");
                 Navigate(AppPage.Search, null, true);
                 Assert(trackList.Items.Count == 2, "Search results");
                 Navigate(AppPage.Queue, null, true);
@@ -51,6 +61,9 @@ namespace YTMusicLite.Client
                     new Dictionary<string, object> { { "url", "https://i.ytimg.com/vi/thumb-test/hqdefault.jpg" } }
                 };
                 Assert(CatalogService.Thumbnail(artworkData, "thumb-test").EndsWith("/hqdefault.jpg"), "Thumbnail array parsing");
+                Playlist imported = new PlaylistImportService(clientSettings).Parse("{\"id\":\"PL-test\",\"title\":\"Imported mix\",\"entries\":[{\"id\":\"song-1\",\"title\":\"Imported song\",\"artist\":\"Test artist\",\"duration\":180}]}", "https://www.youtube.com/playlist?list=PL-test");
+                Assert(imported.IsRemote && imported.Tracks.Count == 1 && imported.Tracks[0].ThumbnailUrl.Contains("song-1"), "YouTube playlist parsing");
+                Assert(PlaylistImportService.Validate("https://music.youtube.com/playlist?list=PL-test").Host == "music.youtube.com", "YouTube playlist URL validation");
                 Track repairedArtwork = new Track { Id = "repair-test", Source = "https://www.youtube.com/watch?v=repair-test", ThumbnailUrl = "Unknown artist" };
                 YouTubeArtwork.Ensure(repairedArtwork);
                 Assert(repairedArtwork.ThumbnailUrl.Contains("repair-test"), "Existing artwork repair");
@@ -77,6 +90,10 @@ namespace YTMusicLite.Client
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-home.png"); }
                 Navigate(AppPage.Search, null, true);
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-search.png"); }
+                Navigate(AppPage.Playlists, null, true);
+                using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-playlists.png"); }
+                Navigate(AppPage.Discover, null, true);
+                using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-discover.png"); }
                 Size = MinimumSize;
                 Navigate(AppPage.Library, null, true);
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-compact.png"); }
@@ -84,7 +101,7 @@ namespace YTMusicLite.Client
                 Assert(miniPlayer != null, "Mini player");
                 using (Bitmap image = new Bitmap(miniPlayer.Width, miniPlayer.Height)) { miniPlayer.DrawToBitmap(image, new Rectangle(Point.Empty, miniPlayer.Size)); image.Save("client-mini.png"); }
                 miniPlayer.Close();
-                File.WriteAllText("ui-check.txt", "PASS: native navigation, search, library, playlists, queue, settings, responsive layout, complete playback controls, mini player");
+                File.WriteAllText("ui-check.txt", "PASS: native navigation, discovery, playlist overview/import parsing, search, library, queue, settings, responsive layout, complete playback controls, mini player");
             }
             catch (Exception error)
             {

@@ -25,7 +25,10 @@ namespace YTMusicLite.Client
     {
         public string Id { get; set; }
         public string Name { get; set; }
+        public string SourceUrl { get; set; }
+        public bool IsRemote { get; set; }
         public DateTime CreatedUtc { get; set; }
+        public DateTime LastSyncedUtc { get; set; }
         public List<Track> Tracks { get; set; }
 
         public Playlist()
@@ -40,21 +43,28 @@ namespace YTMusicLite.Client
         public List<Track> SavedTracks { get; set; }
         public List<Playlist> Playlists { get; set; }
         public List<Track> RecentTracks { get; set; }
+        public List<Track> DiscoveryTracks { get; set; }
+        public DateTime DiscoveryUpdatedUtc { get; set; }
+        public string DiscoveryReason { get; set; }
 
         public LibraryData()
         {
-            SchemaVersion = 2;
+            SchemaVersion = 3;
             SavedTracks = new List<Track>();
             Playlists = new List<Playlist>();
             RecentTracks = new List<Track>();
+            DiscoveryTracks = new List<Track>();
+            DiscoveryReason = "";
         }
     }
 
     internal enum AppPage
     {
         Home,
+        Discover,
         Search,
         Library,
+        Playlists,
         Playlist,
         Queue,
         Settings
