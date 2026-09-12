@@ -44,7 +44,7 @@ namespace YTMusicLite.Client
                 {
                     using (WebClient client = new WebClient())
                     {
-                        client.Headers[HttpRequestHeader.UserAgent] = "YTMusicLite/6.0";
+                        client.Headers[HttpRequestHeader.UserAgent] = "YTMusicLite/7.1";
                         client.DownloadFile(url, path + ".tmp");
                     }
                     File.Move(path + ".tmp", path);

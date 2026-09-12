@@ -15,7 +15,13 @@ namespace YTMusicLite.Client
 
         private readonly PlaybackEngine playback;
         private readonly Func<Task> previous;
+        private readonly Func<Task> togglePlayback;
         private readonly Func<Task> next;
+        private readonly Action stop;
+        private readonly Action toggleShuffle;
+        private readonly Action cycleRepeat;
+        private readonly Func<int, Task> setVolume;
+        private readonly Func<Task> toggleMute;
         private readonly Action expand;
         private readonly ArtworkControl artwork;
         private readonly Label title;
@@ -23,18 +29,28 @@ namespace YTMusicLite.Client
         private readonly Label elapsed;
         private readonly Label duration;
         private readonly IconButton playPause;
+        private readonly IconButton shuffle;
+        private readonly IconButton repeat;
+        private readonly IconButton mute;
         private readonly IconButton pin;
         private readonly ValueSlider progress;
+        private readonly ValueSlider volume;
         private bool applying;
 
-        public MiniPlayerWindow(PlaybackEngine engine, Func<Task> previousAction, Func<Task> nextAction, Action expandAction)
+        public MiniPlayerWindow(PlaybackEngine engine, Func<Task> previousAction, Func<Task> togglePlaybackAction, Func<Task> nextAction, Action stopAction, Action shuffleAction, Action repeatAction, Func<int, Task> volumeAction, Func<Task> muteAction, Action expandAction)
         {
             playback = engine;
             previous = previousAction;
+            togglePlayback = togglePlaybackAction;
             next = nextAction;
+            stop = stopAction;
+            toggleShuffle = shuffleAction;
+            cycleRepeat = repeatAction;
+            setVolume = volumeAction;
+            toggleMute = muteAction;
             expand = expandAction;
             Text = "YT Music Lite mini player";
-            Size = new Size(472, 192);
+            Size = new Size(548, 228);
             MinimumSize = Size;
             MaximumSize = Size;
             FormBorderStyle = FormBorderStyle.None;
@@ -75,10 +91,11 @@ namespace YTMusicLite.Client
             artwork = new ArtworkControl { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 14, 0), Radius = 10, KeyText = "♪" };
             content.Controls.Add(artwork, 0, 0);
 
-            TableLayoutPanel details = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, BackColor = Theme.Sidebar };
+            TableLayoutPanel details = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, ColumnCount = 1, BackColor = Theme.Sidebar };
             details.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
             details.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
             details.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
+            details.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
             details.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             title = new Label { Text = "Nothing playing", Dock = DockStyle.Fill, ForeColor = Theme.Text, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), TextAlign = ContentAlignment.BottomLeft, AutoEllipsis = true };
             artist = new Label { Text = "Choose a song", Dock = DockStyle.Fill, ForeColor = Theme.Muted, TextAlign = ContentAlignment.TopLeft, AutoEllipsis = true };
@@ -92,12 +109,23 @@ namespace YTMusicLite.Client
             timeline.Controls.Add(elapsed, 0, 0); timeline.Controls.Add(progress, 1, 0); timeline.Controls.Add(duration, 2, 0);
             details.Controls.Add(timeline, 0, 2);
 
-            FlowLayoutPanel controls = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Sidebar, Padding = new Padding(80, 0, 0, 0) };
+            FlowLayoutPanel controls = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Sidebar, Padding = new Padding(30, 0, 0, 0) };
+            shuffle = ControlButton(AppIcon.Shuffle, "Shuffle"); shuffle.Click += delegate { toggleShuffle(); };
             IconButton previousButton = ControlButton(AppIcon.Previous, "Previous song"); previousButton.Click += async delegate { await previous(); };
-            playPause = ControlButton(AppIcon.Play, "Play or pause"); playPause.Accent = true; playPause.Click += async delegate { await playback.TogglePauseAsync(); };
+            playPause = ControlButton(AppIcon.Play, "Play or pause"); playPause.Accent = true; playPause.Click += async delegate { await togglePlayback(); };
             IconButton nextButton = ControlButton(AppIcon.Next, "Next song"); nextButton.Click += async delegate { await next(); };
-            controls.Controls.Add(previousButton); controls.Controls.Add(playPause); controls.Controls.Add(nextButton);
+            repeat = ControlButton(AppIcon.Repeat, "Repeat off"); repeat.Click += delegate { cycleRepeat(); };
+            IconButton stopButton = ControlButton(AppIcon.Stop, "Stop"); stopButton.Click += delegate { stop(); };
+            controls.Controls.Add(shuffle); controls.Controls.Add(previousButton); controls.Controls.Add(playPause); controls.Controls.Add(nextButton); controls.Controls.Add(repeat); controls.Controls.Add(stopButton);
             details.Controls.Add(controls, 0, 3);
+
+            TableLayoutPanel volumeRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, BackColor = Theme.Sidebar, Padding = new Padding(82, 0, 70, 0) };
+            volumeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 38)); volumeRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            mute = ControlButton(AppIcon.Volume, "Mute"); mute.Margin = Padding.Empty; mute.Click += async delegate { await toggleMute(); };
+            volume = new ValueSlider { Dock = DockStyle.Fill, Value = 85, AccessibleName = "Volume", Margin = new Padding(2, 5, 2, 5) };
+            volume.ValueCommitted += async delegate { if (!applying) await setVolume((int)volume.Value); };
+            volumeRow.Controls.Add(mute, 0, 0); volumeRow.Controls.Add(volume, 1, 0);
+            details.Controls.Add(volumeRow, 0, 4);
             content.Controls.Add(details, 1, 0);
         }
 
@@ -119,7 +147,22 @@ namespace YTMusicLite.Client
             progress.Value = Math.Min(progress.Maximum, snapshot.PositionSeconds);
             elapsed.Text = FormatTime(snapshot.PositionSeconds);
             duration.Text = FormatTime(total);
+            volume.Value = snapshot.Volume;
+            mute.Icon = snapshot.Volume == 0 ? AppIcon.VolumeMuted : AppIcon.Volume;
+            mute.AccessibleName = snapshot.Volume == 0 ? "Unmute" : "Mute";
+            mute.Invalidate();
             applying = false;
+        }
+
+        public void ApplyPlaybackOptions(bool shuffleEnabled, RepeatMode repeatMode)
+        {
+            shuffle.Checked = shuffleEnabled;
+            shuffle.AccessibleName = shuffleEnabled ? "Turn shuffle off" : "Turn shuffle on";
+            shuffle.Invalidate();
+            repeat.Checked = repeatMode != RepeatMode.Off;
+            repeat.Icon = repeatMode == RepeatMode.One ? AppIcon.RepeatOne : AppIcon.Repeat;
+            repeat.AccessibleName = repeatMode == RepeatMode.One ? "Repeat one" : (repeatMode == RepeatMode.All ? "Repeat all" : "Repeat off");
+            repeat.Invalidate();
         }
 
         protected override void OnShown(EventArgs e)

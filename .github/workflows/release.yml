@@ -1,12 +1,7 @@
-name: YT Music Lite 7 Windows release
+name: Archived WebView build
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    tags:
-      - "app-v*"
 
 concurrency:
   group: release-windows-${{ github.ref }}

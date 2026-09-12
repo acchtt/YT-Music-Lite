@@ -69,6 +69,13 @@ namespace YTMusicLite.Client
         Failed
     }
 
+    internal enum RepeatMode
+    {
+        Off,
+        All,
+        One
+    }
+
     internal sealed class PlaybackSnapshot : EventArgs
     {
         public PlaybackState State { get; set; }

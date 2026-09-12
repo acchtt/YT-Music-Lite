@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   release:
-    if: startsWith(github.event.head_commit.message, 'Publish YT Music Lite Legacy')
+    if: startsWith(github.event.head_commit.message, 'Publish YT Music Lite')
     permissions:
       contents: write
     runs-on: windows-latest
@@ -41,6 +41,10 @@ jobs:
           & (Join-Path $Build 'yt-dlp.exe') --version
           & (Join-Path $Build 'deno.exe') --version
 
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis --yes --no-progress
+
       - name: Playback, memory and interface checks
         shell: pwsh
         run: |
@@ -54,26 +58,36 @@ jobs:
 
       - name: Package update
         shell: pwsh
-        run: .\client\make-release.ps1
+        run: |
+          .\client\make-release.ps1
+          $Build = (Resolve-Path .\client\build).Path
+          $Release = (Resolve-Path .\client\release).Path
+          $MakeNsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+          & $MakeNsis "/DVERSION=7.1.0" "/DVERSION4=7.1.0.0" "/DBUILDDIR=$Build" "/DOUTDIR=$Release" .\client\installer.nsi
+          if ($LASTEXITCODE -ne 0) { throw 'NSIS installer build failed' }
+          $Installer = Join-Path $Release 'YTMusicLite-v7.1.0-win-x64-setup.exe'
+          $Hash = (Get-FileHash -Algorithm SHA256 $Installer).Hash.ToLowerInvariant()
+          "$Hash  $(Split-Path $Installer -Leaf)" | Set-Content -Encoding ascii "$Installer.sha256"
 
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v6.0.4
+          tag_name: ytmlite-v7.1.0
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v6.0.4
+          name: YT Music Lite v7.1.0 — Native Windows
+          make_latest: true
           body: |
-            YT Music Lite v6.0.4
+            YT Music Lite v7.1.0 replaces the WebView2 release with the low-memory Windows-native client.
 
-            - Replaces every previous client with one clean Windows-native architecture.
-            - Adds complete Home, Search, Library, Playlists, Queue, and Settings navigation.
-            - Adds a persistent timeline player, media keys, tray controls, and a rebuilt mini player.
-            - Adds real artwork with bounded memory and disk caching.
-            - Migrates existing v5 libraries and preserves browser-free, low-memory playback.
-            - Browser sign-in buttons open the Google account chooser and provide clear completion guidance.
-            - Adds Brave sign-in, cookie access, browser detection, and automated regression coverage.
-            - Waits for Brave sign-in to finish and verifies authenticated account cookies before reporting Connected.
-            - Syncs up to 250 liked YouTube Music songs into the native Library after sign-in, with a manual refresh action.
+            - Removes the continuously running WebView2/Chromium process tree.
+            - Uses native WinForms controls and audio-only mpv playback.
+            - Adds previous, play/pause, next, stop, seek, volume, mute, shuffle, repeat-all, and repeat-one controls.
+            - Adds the same transport controls to the mini player, tray menu, keyboard shortcuts, and Windows media keys.
+            - Preserves saved music, recent tracks, playlists, and account settings.
+            - Enforces a 140 MiB combined client/player memory gate during CI playback tests.
+            - Includes both a Windows installer and a portable/in-app-update ZIP.
           files: |
-            client/release/YTMusicLite-v6.0.4-win-x64.zip
-            client/release/YTMusicLite-v6.0.4-win-x64.zip.sha256
+            client/release/YTMusicLite-v7.1.0-win-x64.zip
+            client/release/YTMusicLite-v7.1.0-win-x64.zip.sha256
+            client/release/YTMusicLite-v7.1.0-win-x64-setup.exe
+            client/release/YTMusicLite-v7.1.0-win-x64-setup.exe.sha256

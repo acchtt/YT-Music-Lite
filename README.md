@@ -1,52 +1,68 @@
-# YT Music Lite 7 — Windows
+# YT Music Lite — Native Windows
 
-YT Music Lite 7 is a Windows-only, Spotify-inspired YouTube Music desktop client built with Tauri 2, Svelte 5, Rust, SQLite, and the YouTube IFrame Player API.
+YT Music Lite 7.1 is a browser-free Windows music client focused on low memory use. It provides YouTube search, saved music, local playlists, a playback queue, a history-aware Home view, local audio, media keys, a mini player, and verified in-app updates.
 
-## Runtime design
+## Production architecture
 
-- One WebView2 window and one persistent player instance.
-- Visible 200px YouTube player surface in the Now Playing panel.
-- Playback pauses when the app is minimized.
-- Rust owns account/catalog access and local SQLite listening history.
-- Svelte owns the shell, queue, transport controls, and bounded UI state.
-- Weekly Mix uses locally weighted listening history to expand recommendations around favorite artists.
-- Search is debounced and track artwork is lazy-loaded.
+The production client lives in `client/` and uses Windows-native WinForms controls. It does not host WebView2 or another continuously running browser engine.
 
-The `client/`, `yt-music-lite/`, and `native-prototype/` directories are retained as previous implementation history. Version 7 builds from `src/` and `src-tauri/`.
+- `yt-dlp` performs an on-demand search or resolves one audio URL, then exits.
+- `mpv` plays audio only, with the video pipeline disabled and bounded network buffers.
+- Settings can use cookies from Edge, Brave, Chrome, Firefox, or an exported `cookies.txt` when YouTube requires sign-in.
+- Library, recent tracks, playlists, and playback preferences are stored under `%LocalAppData%\YTMusicLite`.
+- Artwork uses bounded memory and disk caches.
+- Update archives must pass SHA-256 verification before installation.
 
-## Requirements
+The Tauri, Svelte, and older WebView2 sources are retained as development history; they are not part of the production build or release.
 
-- Windows 10 or Windows 11
-- WebView2 Runtime
-- Node.js 20.19+
-- Rust stable with the MSVC toolchain
-- Visual Studio Build Tools with Desktop development with C++
+## Playback controls
 
-## Development
+- Previous (restarts the current track after three seconds)
+- Play/pause
+- Next
+- Stop
+- Seek timeline
+- Volume and mute
+- Shuffle
+- Repeat all and repeat one
 
-```powershell
-npm ci
-npm run tauri:dev
-```
+These controls are available from the main player and mini player. The tray menu and Windows media keys cover the relevant transport and volume actions.
 
-## Build the Windows installer
+## Install
 
-```powershell
-.\scripts\build-windows-v7.ps1
-```
+Download `YTMusicLite-v7.1.0-win-x64-setup.exe` from the latest GitHub release. A portable ZIP is also provided and is used by the verified in-app updater.
 
-The NSIS installer is written under `src-tauri\target\release\bundle\nsis`.
+User data is stored separately from the installation directory, so upgrading preserves the library and playlists.
 
-## RAM release gate
+## Build
 
-Start a release build, connect an account, load a large list, begin playback, and run:
+On Windows with .NET Framework 4.8 and PowerShell:
 
 ```powershell
-.\scripts\measure-windows-v7.ps1
+.\client\build.ps1
 ```
 
-The test fails if the median private working set exceeds 200 MB. Run it without DevTools and after Windows has finished initializing WebView2.
+Place `mpv.exe`, `yt-dlp.exe`, and `deno.exe` beside `YTMusicLite.exe` for playback. Release builds include all three.
 
-## Playback notes
+Run the complete native playback, process-cleanup, and memory test with:
 
-The player uses YouTube's supported embedded-player interface. It intentionally does not extract audio URLs, download media, or continue playback while minimized. The packaged app must be tested to confirm WebView2 sends the player identification/referrer expected by YouTube.
+```powershell
+.\client\measure.ps1
+```
+
+The test rejects a combined client/player peak above 140 MiB, an idle client peak above 80 MiB, or leftover playback helpers after shutdown.
+
+## Keyboard and media controls
+
+- `Ctrl+K` or `Ctrl+L`: focus Search
+- `Space`: play/pause outside text fields
+- `Ctrl+Left` / `Ctrl+Right`: previous/next
+- `Ctrl+Shift+S`: shuffle
+- `Ctrl+Shift+R`: cycle repeat mode
+- `Alt+Left` / `Alt+Right`: page history
+- `Ctrl+M`: mini player
+- Hardware play/pause, previous, next, stop, mute, volume-down, and volume-up keys are supported
+
+## Playback-service note
+
+This low-memory architecture resolves YouTube audio through `yt-dlp`, which is unofficial and can require updates when YouTube changes. Only play content you are authorized to access and follow the service's terms.

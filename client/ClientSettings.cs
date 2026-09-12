@@ -10,12 +10,17 @@ namespace YTMusicLite.Client
         public string CookieFile { get; set; }
         public string CookieProfile { get; set; }
         public bool AccessVerified { get; set; }
+        public int Volume { get; set; }
+        public bool Shuffle { get; set; }
+        public string RepeatMode { get; set; }
 
         public ClientSettings()
         {
             CookieSource = "none";
             CookieFile = "";
             CookieProfile = "";
+            Volume = 85;
+            RepeatMode = "off";
         }
     }
 
@@ -30,8 +35,13 @@ namespace YTMusicLite.Client
             {
                 if (File.Exists(path))
                 {
-                    ClientSettings settings = serializer.Deserialize<ClientSettings>(File.ReadAllText(path));
-                    if (settings != null) return settings;
+                    string json = File.ReadAllText(path);
+                    ClientSettings settings = serializer.Deserialize<ClientSettings>(json);
+                    if (settings != null)
+                    {
+                        if (json.IndexOf("\"Volume\"", StringComparison.OrdinalIgnoreCase) < 0) settings.Volume = 85;
+                        return settings;
+                    }
                 }
             }
             catch { }

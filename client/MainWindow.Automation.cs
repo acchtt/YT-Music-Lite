@@ -52,6 +52,11 @@ namespace YTMusicLite.Client
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-settings.png"); }
                 Navigate(AppPage.Home, null, true);
                 Assert(homeTiles.Controls.Count > 0 && trackList.Items.Count >= 2, "Home page");
+                Assert(shuffleButton != null && repeatButton != null && stopButton != null && muteButton != null, "Complete playback controls");
+                ToggleShuffle();
+                Assert(shuffleEnabled && shuffleButton.Checked, "Shuffle state");
+                CycleRepeatMode();
+                Assert(repeatMode == RepeatMode.All && repeatButton.Checked, "Repeat state");
 
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-home.png"); }
                 Navigate(AppPage.Search, null, true);
@@ -63,7 +68,7 @@ namespace YTMusicLite.Client
                 Assert(miniPlayer != null, "Mini player");
                 using (Bitmap image = new Bitmap(miniPlayer.Width, miniPlayer.Height)) { miniPlayer.DrawToBitmap(image, new Rectangle(Point.Empty, miniPlayer.Size)); image.Save("client-mini.png"); }
                 miniPlayer.Close();
-                File.WriteAllText("ui-check.txt", "PASS: clean client navigation, search, library, playlists, queue, settings, responsive layout, mini player");
+                File.WriteAllText("ui-check.txt", "PASS: native navigation, search, library, playlists, queue, settings, responsive layout, complete playback controls, mini player");
             }
             catch (Exception error)
             {

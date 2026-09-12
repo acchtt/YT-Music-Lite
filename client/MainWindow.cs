@@ -31,6 +31,10 @@ namespace YTMusicLite.Client
         private Playlist currentPlaylist;
         private List<Track> searchResults = new List<Track>();
         private PlaybackSnapshot snapshot = new PlaybackSnapshot { State = PlaybackState.Stopped, Volume = 85 };
+        private readonly Random random = new Random();
+        private bool shuffleEnabled;
+        private RepeatMode repeatMode;
+        private int lastAudibleVolume = 85;
 
         private Panel sidebar;
         private FlowLayoutPanel playlistNavigation;
@@ -53,6 +57,10 @@ namespace YTMusicLite.Client
         private Label playerArtist;
         private Label statusLabel;
         private IconButton playPauseButton;
+        private IconButton shuffleButton;
+        private IconButton repeatButton;
+        private IconButton stopButton;
+        private IconButton muteButton;
         private IconButton saveButton;
         private ValueSlider progressSlider;
         private ValueSlider volumeSlider;
@@ -74,11 +82,17 @@ namespace YTMusicLite.Client
             library = automation ? new LibraryData() : store.Load();
             settingsStore = new SettingsStore();
             clientSettings = automation ? new ClientSettings() : settingsStore.Load();
+            clientSettings.Volume = Math.Max(0, Math.Min(100, clientSettings.Volume));
+            shuffleEnabled = clientSettings.Shuffle;
+            repeatMode = ParseRepeatMode(clientSettings.RepeatMode);
+            lastAudibleVolume = clientSettings.Volume > 0 ? clientSettings.Volume : 85;
+            snapshot.Volume = clientSettings.Volume;
             catalog = new CatalogService(clientSettings);
             playback = new PlaybackEngine(clientSettings);
             playback.SnapshotChanged += PlaybackSnapshotChanged;
             playback.PlaybackEnded += PlaybackEnded;
             BuildWindow();
+            ApplyPlaybackOptions();
             BuildTray();
             RefreshPlaylistNavigation();
             Navigate(AppPage.Home, null, true);
@@ -268,11 +282,14 @@ namespace YTMusicLite.Client
             center.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46)); center.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); center.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
             center.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); center.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             FlowLayoutPanel transport = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, BackColor = Theme.Sidebar, Padding = new Padding(0, 4, 0, 0) };
+            shuffleButton = PlayerIcon(AppIcon.Shuffle, "Shuffle"); shuffleButton.Checked = shuffleEnabled; shuffleButton.Click += delegate { ToggleShuffle(); };
             IconButton previous = PlayerIcon(AppIcon.Previous, "Previous song"); previous.Click += async delegate { await MoveQueueAsync(-1); };
             playPauseButton = PlayerIcon(AppIcon.Play, "Play or pause"); playPauseButton.Accent = true; playPauseButton.Size = new Size(46, 46); playPauseButton.Click += async delegate { await TogglePlaybackAsync(); };
             IconButton next = PlayerIcon(AppIcon.Next, "Next song"); next.Click += async delegate { await MoveQueueAsync(1); };
-            transport.Controls.Add(previous); transport.Controls.Add(playPauseButton); transport.Controls.Add(next);
-            transport.Dock = DockStyle.None; transport.Size = new Size(150, 50);
+            repeatButton = PlayerIcon(repeatMode == RepeatMode.One ? AppIcon.RepeatOne : AppIcon.Repeat, "Repeat"); repeatButton.Checked = repeatMode != RepeatMode.Off; repeatButton.Click += delegate { CycleRepeatMode(); };
+            stopButton = PlayerIcon(AppIcon.Stop, "Stop"); stopButton.Click += delegate { StopPlayback(); };
+            transport.Controls.Add(shuffleButton); transport.Controls.Add(previous); transport.Controls.Add(playPauseButton); transport.Controls.Add(next); transport.Controls.Add(repeatButton); transport.Controls.Add(stopButton);
+            transport.Dock = DockStyle.None; transport.Size = new Size(286, 50);
             Panel transportCenter = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Sidebar }; transportCenter.Controls.Add(transport); transportCenter.Resize += delegate { transport.Location = new Point(Math.Max(0, (transportCenter.Width - transport.Width) / 2), 0); };
             center.Controls.Add(transportCenter, 0, 0); center.SetColumnSpan(transportCenter, 3);
             elapsedLabel = TimeLabel("0:00", ContentAlignment.MiddleRight);
@@ -285,10 +302,10 @@ namespace YTMusicLite.Client
             FlowLayoutPanel utility = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, BackColor = Theme.Sidebar, Padding = new Padding(0, 24, 0, 0) };
             IconButton mini = PlayerIcon(AppIcon.Mini, "Open mini player"); mini.Click += delegate { ShowMiniPlayer(); };
             IconButton queueButton = PlayerIcon(AppIcon.Queue, "Show queue"); queueButton.Click += delegate { Navigate(AppPage.Queue, null, true); };
-            volumeSlider = new ValueSlider { Width = 110, Value = 85, AccessibleName = "Volume", Margin = new Padding(2, 7, 4, 0) };
-            volumeSlider.ValueCommitted += async delegate { await playback.SetVolumeAsync((int)volumeSlider.Value); };
+            volumeSlider = new ValueSlider { Width = 110, Value = clientSettings.Volume, AccessibleName = "Volume", Margin = new Padding(2, 7, 4, 0) };
+            volumeSlider.ValueCommitted += async delegate { await SetVolumeAsync((int)volumeSlider.Value); };
             utility.Controls.Add(mini); utility.Controls.Add(queueButton); utility.Controls.Add(volumeSlider);
-            IconButton volumeIcon = PlayerIcon(AppIcon.Volume, "Volume"); volumeIcon.TabStop = false; utility.Controls.Add(volumeIcon);
+            muteButton = PlayerIcon(clientSettings.Volume == 0 ? AppIcon.VolumeMuted : AppIcon.Volume, "Mute or unmute"); muteButton.Click += async delegate { await ToggleMuteAsync(); }; utility.Controls.Add(muteButton);
             columns.Controls.Add(utility, 2, 0);
             return shell;
         }
@@ -322,7 +339,7 @@ namespace YTMusicLite.Client
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 6.0.4", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.1.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };
@@ -358,7 +375,11 @@ namespace YTMusicLite.Client
             ContextMenuStrip menu = new ContextMenuStrip { BackColor = Theme.Surface, ForeColor = Theme.Text, ShowImageMargin = false };
             menu.Items.Add("Show YT Music Lite", null, delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
             menu.Items.Add("Play / pause", null, async delegate { await TogglePlaybackAsync(); });
+            menu.Items.Add("Previous song", null, async delegate { await MoveQueueAsync(-1); });
             menu.Items.Add("Next song", null, async delegate { await MoveQueueAsync(1); });
+            menu.Items.Add("Stop", null, delegate { StopPlayback(); });
+            menu.Items.Add("Shuffle", null, delegate { ToggleShuffle(); });
+            menu.Items.Add("Cycle repeat", null, delegate { CycleRepeatMode(); });
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Exit", null, delegate { closing = true; Close(); });
             trayIcon.ContextMenuStrip = menu;

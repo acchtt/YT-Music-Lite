@@ -1,39 +1,29 @@
-# YT Music Lite 7 architecture
+# Native Windows architecture
 
-## Scope
+YT Music Lite 7.1 targets 64-bit Windows 10 and Windows 11. The release is built from `client/` with .NET Framework 4.8 and native WinForms controls.
 
-Version 7 targets Windows 10 and Windows 11 only. Tauri hosts one Svelte application in one WebView2 process. The previous React mini-player and hidden playback window have been removed from the active build.
+## Runtime process model
 
-```text
-Svelte shell
-  ├─ Home, Search, Library, Weekly Mix
-  ├─ queue and transport state
-  └─ persistent visible YouTube IFrame player
-             │
-             ├─ YouTube IFrame Player API
-             └─ Tauri commands
-                    ├─ YouTube Music catalog/account adapter
-                    ├─ SQLite listening history
-                    └─ signed update service
-```
+1. `YTMusicLite.exe` owns the interface, queue, library, playlists, listening history, and playback state.
+2. `yt-dlp.exe` starts only for a search, account sync, or playback URL resolution and exits when the request finishes.
+3. One `mpv.exe` process exists while audio is playing. Video decoding is disabled and its demuxer buffer is capped.
+4. `deno.exe` may run briefly when `yt-dlp` needs its YouTube challenge solver.
 
-## Memory rules
+There is no embedded browser or WebView2 process in the production application.
 
-1. Only the main WebView is persistent.
-2. The sign-in WebView exists only during authentication.
-3. Artwork uses browser lazy loading and no unbounded JavaScript image cache.
-4. Search waits 320 ms and ignores empty requests.
-5. SQLite connections are short-lived and use WAL with normal synchronization.
-6. No Node, Python, mpv, yt-dlp, or Deno process runs with the app.
-7. The Windows release fails QA when its median private working set exceeds 200 MB.
+## Data boundaries
 
-## Discovery
+- `%LocalAppData%\YTMusicLite\library-v2.json`: saved tracks, playlists, recent tracks, and play counts.
+- `%LocalAppData%\YTMusicLite\settings.json`: selected cookie source and playback preferences.
+- `%LocalAppData%\YTMusicLite\artwork`: bounded artwork cache.
+- Application binaries: installer-selected directory, separate from user data.
 
-Playback writes compact `play`, `complete`, and `skip` events to `%LocalAppData%`. Weekly Mix ranks favorite artists, fetches a small candidate set, excludes already-heard tracks, caps each artist at three candidates, and falls back to highly scored familiar tracks.
+## Memory policy
 
-## Data and security boundaries
+`client/measure.ps1` measures the complete process tree during real local audio decoding. CI fails above 140 MiB combined, above 80 MiB while idle/after stop, or when a child process survives shutdown.
 
-- Session material remains in the Rust side and is never returned to Svelte.
-- The frontend receives normalized view models only.
-- Playback uses the supported embedded YouTube player instead of resolved stream URLs.
-- Playback pauses when the app is hidden or minimized.
+The benchmark is a release gate, not a promise that every online track and Windows configuration will use identical memory.
+
+## Update model
+
+Releases include a native installer and a portable ZIP. The in-app updater reads `ytmlite-v*` releases, downloads the matching ZIP, verifies its SHA-256 digest, and then replaces application files through the separate updater process. User data is not stored in the installation directory.

@@ -31,11 +31,13 @@ namespace YTMusicLite.Client
 
         public PlaybackState State { get; private set; }
         public Track CurrentTrack { get { return current; } }
+        public int Volume { get { return volume; } }
 
         public PlaybackEngine() : this(new SettingsStore().Load()) { }
         public PlaybackEngine(ClientSettings clientSettings)
         {
             settings = clientSettings ?? new ClientSettings();
+            volume = Math.Max(0, Math.Min(100, settings.Volume));
             State = PlaybackState.Stopped;
             pollTimer = new Timer(Poll, null, Timeout.Infinite, Timeout.Infinite);
         }
@@ -101,7 +103,12 @@ namespace YTMusicLite.Client
         public async Task SetVolumeAsync(int value)
         {
             volume = Math.Max(0, Math.Min(100, value));
-            if (IsPlayerAlive()) await SendAsync(new object[] { "set_property", "volume", volume });
+            if (IsPlayerAlive())
+            {
+                await SendAsync(new object[] { "set_property", "volume", volume });
+                await PollNow();
+            }
+            else Raise(new PlaybackSnapshot { State = State, Track = current, Volume = volume });
         }
 
         public void Stop()

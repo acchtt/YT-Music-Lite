@@ -184,6 +184,14 @@ namespace YTMusicLite.Client
             if (context != null) queue.AddRange(context);
             if (queue.Count == 0) queue.Add(track);
             queueIndex = Math.Max(0, Math.Min(queue.Count - 1, index));
+            if (shuffleEnabled && queue.Count > 1)
+            {
+                Track selected = queue[queueIndex];
+                queue.RemoveAt(queueIndex);
+                ShuffleRange(0);
+                queue.Insert(0, selected);
+                queueIndex = 0;
+            }
             await StartQueueTrackAsync(track);
         }
 
@@ -216,11 +224,107 @@ namespace YTMusicLite.Client
         private async Task MoveQueueAsync(int offset)
         {
             if (queue.Count == 0) { statusLabel.Text = "The queue is empty"; return; }
+            if (offset < 0 && snapshot.PositionSeconds > 3 && (snapshot.State == PlaybackState.Playing || snapshot.State == PlaybackState.Paused))
+            {
+                try { await playback.SeekAsync(0); } catch (Exception error) { statusLabel.Text = error.Message; }
+                return;
+            }
             int next = queueIndex + offset;
-            if (next < 0 || next >= queue.Count) { statusLabel.Text = offset > 0 ? "End of queue" : "Start of queue"; return; }
+            if (next < 0 || next >= queue.Count)
+            {
+                if (repeatMode == RepeatMode.All) next = next < 0 ? queue.Count - 1 : 0;
+                else { statusLabel.Text = offset > 0 ? "End of queue" : "Start of queue"; return; }
+            }
             queueIndex = next;
             await StartQueueTrackAsync(queue[queueIndex]);
             if (currentPage == AppPage.Queue) RenderPage();
+        }
+
+        private void ToggleShuffle()
+        {
+            shuffleEnabled = !shuffleEnabled;
+            if (shuffleEnabled && queue.Count > 1) ShuffleRange(Math.Max(0, queueIndex + 1));
+            clientSettings.Shuffle = shuffleEnabled;
+            SavePlaybackSettings();
+            ApplyPlaybackOptions();
+            statusLabel.Text = shuffleEnabled ? "Shuffle on" : "Shuffle off";
+            if (currentPage == AppPage.Queue) RenderPage();
+        }
+
+        private void ShuffleRange(int start)
+        {
+            for (int index = queue.Count - 1; index > start; index--)
+            {
+                int swap = random.Next(start, index + 1);
+                Track value = queue[index];
+                queue[index] = queue[swap];
+                queue[swap] = value;
+            }
+        }
+
+        private void CycleRepeatMode()
+        {
+            repeatMode = repeatMode == RepeatMode.Off ? RepeatMode.All : (repeatMode == RepeatMode.All ? RepeatMode.One : RepeatMode.Off);
+            clientSettings.RepeatMode = repeatMode == RepeatMode.One ? "one" : (repeatMode == RepeatMode.All ? "all" : "off");
+            SavePlaybackSettings();
+            ApplyPlaybackOptions();
+            statusLabel.Text = repeatMode == RepeatMode.One ? "Repeat one" : (repeatMode == RepeatMode.All ? "Repeat all" : "Repeat off");
+        }
+
+        private void StopPlayback()
+        {
+            playback.Stop();
+            statusLabel.Text = "Stopped";
+        }
+
+        private async Task SetVolumeAsync(int value)
+        {
+            int adjusted = Math.Max(0, Math.Min(100, value));
+            if (adjusted > 0) lastAudibleVolume = adjusted;
+            snapshot.Volume = adjusted;
+            clientSettings.Volume = adjusted;
+            SavePlaybackSettings();
+            try { await playback.SetVolumeAsync(adjusted); }
+            catch (Exception error) { statusLabel.Text = error.Message; }
+        }
+
+        private async Task ToggleMuteAsync()
+        {
+            int target = snapshot.Volume > 0 ? 0 : Math.Max(1, lastAudibleVolume);
+            volumeSlider.Value = target;
+            await SetVolumeAsync(target);
+        }
+
+        private async Task AdjustVolumeAsync(int change)
+        {
+            int target = Math.Max(0, Math.Min(100, snapshot.Volume + change));
+            volumeSlider.Value = target;
+            await SetVolumeAsync(target);
+        }
+
+        private void SavePlaybackSettings()
+        {
+            if (!automation) settingsStore.Save(clientSettings);
+        }
+
+        private void ApplyPlaybackOptions()
+        {
+            if (shuffleButton != null) { shuffleButton.Checked = shuffleEnabled; shuffleButton.AccessibleName = shuffleEnabled ? "Turn shuffle off" : "Turn shuffle on"; shuffleButton.Invalidate(); }
+            if (repeatButton != null)
+            {
+                repeatButton.Checked = repeatMode != RepeatMode.Off;
+                repeatButton.Icon = repeatMode == RepeatMode.One ? AppIcon.RepeatOne : AppIcon.Repeat;
+                repeatButton.AccessibleName = repeatMode == RepeatMode.One ? "Repeat one" : (repeatMode == RepeatMode.All ? "Repeat all" : "Repeat off");
+                repeatButton.Invalidate();
+            }
+            if (miniPlayer != null) miniPlayer.ApplyPlaybackOptions(shuffleEnabled, repeatMode);
+        }
+
+        private static RepeatMode ParseRepeatMode(string value)
+        {
+            if (string.Equals(value, "one", StringComparison.OrdinalIgnoreCase)) return RepeatMode.One;
+            if (string.Equals(value, "all", StringComparison.OrdinalIgnoreCase)) return RepeatMode.All;
+            return RepeatMode.Off;
         }
 
         private void AddSelectedToQueue()
@@ -431,20 +535,44 @@ namespace YTMusicLite.Client
             elapsedLabel.Text = FormatTime(update.PositionSeconds);
             durationLabel.Text = FormatTime(duration);
             updatingProgress = false;
+            volumeSlider.Value = update.Volume;
+            if (update.Volume > 0) lastAudibleVolume = update.Volume;
+            muteButton.Icon = update.Volume == 0 ? AppIcon.VolumeMuted : AppIcon.Volume;
+            muteButton.AccessibleName = update.Volume == 0 ? "Unmute" : "Mute";
+            muteButton.Invalidate();
             if (miniPlayer != null) miniPlayer.ApplySnapshot(update);
         }
 
         private void PlaybackEnded(object sender, EventArgs eventArgs)
         {
             if (closing) return;
-            try { BeginInvoke((Action)(async delegate { await MoveQueueAsync(1); })); } catch { }
+            try
+            {
+                BeginInvoke((Action)(async delegate
+                {
+                    if (repeatMode == RepeatMode.One && queueIndex >= 0 && queueIndex < queue.Count) await StartQueueTrackAsync(queue[queueIndex]);
+                    else await MoveQueueAsync(1);
+                }));
+            }
+            catch { }
         }
 
         private void ShowMiniPlayer()
         {
             if (miniPlayer != null && !miniPlayer.IsDisposed) { miniPlayer.Activate(); return; }
-            miniPlayer = new MiniPlayerWindow(playback, async delegate { await MoveQueueAsync(-1); }, async delegate { await MoveQueueAsync(1); }, delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
+            miniPlayer = new MiniPlayerWindow(
+                playback,
+                async delegate { await MoveQueueAsync(-1); },
+                async delegate { await TogglePlaybackAsync(); },
+                async delegate { await MoveQueueAsync(1); },
+                delegate { StopPlayback(); },
+                delegate { ToggleShuffle(); },
+                delegate { CycleRepeatMode(); },
+                async delegate(int value) { await SetVolumeAsync(value); },
+                async delegate { await ToggleMuteAsync(); },
+                delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
             miniPlayer.FormClosed += delegate { miniPlayer = null; };
+            miniPlayer.ApplyPlaybackOptions(shuffleEnabled, repeatMode);
             miniPlayer.ApplySnapshot(snapshot);
             miniPlayer.Show(this);
         }
@@ -621,6 +749,10 @@ namespace YTMusicLite.Client
             else if (e.Control && e.KeyCode == Keys.M) { ShowMiniPlayer(); e.SuppressKeyPress = true; }
             else if (e.Alt && e.KeyCode == Keys.Left) { MoveHistory(-1); e.SuppressKeyPress = true; }
             else if (e.Alt && e.KeyCode == Keys.Right) { MoveHistory(1); e.SuppressKeyPress = true; }
+            else if (e.Control && e.Shift && e.KeyCode == Keys.S) { ToggleShuffle(); e.SuppressKeyPress = true; }
+            else if (e.Control && e.Shift && e.KeyCode == Keys.R) { CycleRepeatMode(); e.SuppressKeyPress = true; }
+            else if (e.Control && e.KeyCode == Keys.Left) { e.SuppressKeyPress = true; BeginInvoke((Action)(async delegate { await MoveQueueAsync(-1); })); }
+            else if (e.Control && e.KeyCode == Keys.Right) { e.SuppressKeyPress = true; BeginInvoke((Action)(async delegate { await MoveQueueAsync(1); })); }
             else if (e.KeyCode == Keys.Space && !(ActiveControl is TextBox)) { e.SuppressKeyPress = true; BeginInvoke((Action)(async delegate { await TogglePlaybackAsync(); })); }
         }
 
@@ -633,6 +765,10 @@ namespace YTMusicLite.Client
                 if (command == 14) BeginInvoke((Action)(async delegate { await TogglePlaybackAsync(); }));
                 else if (command == 11) BeginInvoke((Action)(async delegate { await MoveQueueAsync(1); }));
                 else if (command == 12) BeginInvoke((Action)(async delegate { await MoveQueueAsync(-1); }));
+                else if (command == 13) BeginInvoke((Action)(delegate { StopPlayback(); }));
+                else if (command == 8) BeginInvoke((Action)(async delegate { await ToggleMuteAsync(); }));
+                else if (command == 9) BeginInvoke((Action)(async delegate { await AdjustVolumeAsync(-5); }));
+                else if (command == 10) BeginInvoke((Action)(async delegate { await AdjustVolumeAsync(5); }));
             }
             base.WndProc(ref message);
         }

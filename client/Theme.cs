@@ -56,6 +56,10 @@ namespace YTMusicLite.Client
         Heart,
         More,
         Volume,
+        VolumeMuted,
+        Shuffle,
+        Repeat,
+        RepeatOne,
         Mini,
         Close,
         Back,
@@ -113,6 +117,14 @@ namespace YTMusicLite.Client
                         graphics.FillEllipse(brush, 4, 10, 4, 4); graphics.FillEllipse(brush, 10, 10, 4, 4); graphics.FillEllipse(brush, 16, 10, 4, 4); break;
                     case AppIcon.Volume:
                         graphics.FillPolygon(brush, new PointF[] { new PointF(3, 9), new PointF(8, 9), new PointF(13, 5), new PointF(13, 19), new PointF(8, 15), new PointF(3, 15) }); graphics.DrawArc(pen, 14, 7, 6, 10, -60, 120); break;
+                    case AppIcon.VolumeMuted:
+                        graphics.FillPolygon(brush, new PointF[] { new PointF(3, 9), new PointF(8, 9), new PointF(13, 5), new PointF(13, 19), new PointF(8, 15), new PointF(3, 15) }); graphics.DrawLine(pen, 16, 9, 21, 15); graphics.DrawLine(pen, 21, 9, 16, 15); break;
+                    case AppIcon.Shuffle:
+                        graphics.DrawLines(pen, new PointF[] { new PointF(3, 6), new PointF(7, 6), new PointF(17, 18), new PointF(21, 18) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 15), new PointF(21, 18), new PointF(17, 21) }); graphics.DrawLines(pen, new PointF[] { new PointF(3, 18), new PointF(7, 18), new PointF(11, 13) }); graphics.DrawLines(pen, new PointF[] { new PointF(13, 10), new PointF(17, 6), new PointF(21, 6) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 3), new PointF(21, 6), new PointF(17, 9) }); break;
+                    case AppIcon.Repeat:
+                        graphics.DrawLines(pen, new PointF[] { new PointF(4, 9), new PointF(7, 6), new PointF(19, 6), new PointF(21, 8) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 3), new PointF(21, 6), new PointF(18, 10) }); graphics.DrawLines(pen, new PointF[] { new PointF(20, 15), new PointF(17, 18), new PointF(5, 18), new PointF(3, 16) }); graphics.DrawLines(pen, new PointF[] { new PointF(7, 21), new PointF(3, 18), new PointF(6, 14) }); break;
+                    case AppIcon.RepeatOne:
+                        graphics.DrawLines(pen, new PointF[] { new PointF(4, 9), new PointF(7, 6), new PointF(19, 6), new PointF(21, 8) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 3), new PointF(21, 6), new PointF(18, 10) }); graphics.DrawLines(pen, new PointF[] { new PointF(20, 15), new PointF(17, 18), new PointF(5, 18), new PointF(3, 16) }); graphics.DrawLines(pen, new PointF[] { new PointF(7, 21), new PointF(3, 18), new PointF(6, 14) }); using (Font one = new Font("Segoe UI", 7, FontStyle.Bold)) TextRenderer.DrawText(graphics, "1", one, new Rectangle(9, 8, 7, 9), color, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding); break;
                     case AppIcon.Mini:
                         graphics.DrawRectangle(pen, 3, 4, 18, 16); graphics.FillRectangle(brush, 12, 13, 7, 5); break;
                     case AppIcon.Close:
