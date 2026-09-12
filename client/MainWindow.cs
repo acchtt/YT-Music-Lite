@@ -42,7 +42,7 @@ namespace YTMusicLite.Client
         private int currentVolume = 85;
 
         private Panel sidebar;
-        private FlowLayoutPanel playlistNavigation;
+        private PlaylistNavigationControl playlistNavigation;
         private Panel contentHost;
         private Label heading;
         private Label subtitle;
@@ -181,12 +181,8 @@ namespace YTMusicLite.Client
             panel.Controls.Add(playlistHeader);
             playlistHeader.BringToFront();
 
-            playlistNavigation = new FlowLayoutPanel();
-            playlistNavigation.Dock = DockStyle.Fill;
-            playlistNavigation.FlowDirection = FlowDirection.TopDown;
-            playlistNavigation.WrapContents = false;
-            playlistNavigation.AutoScroll = true;
-            playlistNavigation.BackColor = Theme.Sidebar;
+            playlistNavigation = new PlaylistNavigationControl { Dock = DockStyle.Fill, AccessibleName = "Playlists" };
+            playlistNavigation.PlaylistActivated += delegate(Playlist playlist) { Navigate(AppPage.Playlist, playlist, true); };
             panel.Controls.Add(playlistNavigation);
             playlistNavigation.BringToFront();
             return panel;
@@ -353,7 +349,7 @@ namespace YTMusicLite.Client
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.2.1", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.2.2", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };

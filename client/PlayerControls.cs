@@ -1,10 +1,181 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace YTMusicLite.Client
 {
+    internal sealed class PlaylistNavigationControl : Control
+    {
+        private const int RowHeight = 42;
+        private static readonly Font RowFont = new Font("Segoe UI", 9f, FontStyle.Regular);
+        private readonly List<Playlist> playlists = new List<Playlist>();
+        private int scrollOffset;
+        private int hoveredIndex = -1;
+        private string selectedPlaylistId;
+        private bool draggingScrollbar;
+        public event Action<Playlist> PlaylistActivated;
+        public int PlaylistCount { get { return playlists.Count; } }
+        public string SelectedPlaylistId
+        {
+            get { return selectedPlaylistId; }
+            set { selectedPlaylistId = value; EnsureSelectedVisible(); Invalidate(); }
+        }
+
+        public PlaylistNavigationControl()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.Selectable, true);
+            BackColor = Theme.Sidebar;
+            TabStop = true;
+        }
+
+        public void SetPlaylists(IEnumerable<Playlist> values)
+        {
+            playlists.Clear();
+            if (values != null) playlists.AddRange(values);
+            scrollOffset = Math.Min(scrollOffset, MaximumScroll());
+            hoveredIndex = -1;
+            EnsureSelectedVisible();
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            Theme.EnableQuality(e.Graphics);
+            int contentWidth = Math.Max(0, Width - (MaximumScroll() > 0 ? 12 : 0));
+            int first = scrollOffset / RowHeight;
+            int y = first * RowHeight - scrollOffset;
+            for (int index = first; index < playlists.Count && y < Height; index++, y += RowHeight)
+            {
+                Playlist playlist = playlists[index];
+                bool selected = string.Equals(playlist.Id, selectedPlaylistId, StringComparison.OrdinalIgnoreCase);
+                Rectangle row = new Rectangle(4, y + 2, Math.Max(0, contentWidth - 8), RowHeight - 4);
+                if (selected || index == hoveredIndex || (Focused && index == SelectedIndex()))
+                {
+                    using (SolidBrush background = new SolidBrush(selected ? Theme.SurfaceSelected : Theme.SurfaceHover))
+                    using (GraphicsPath path = Theme.Rounded(row, 9)) e.Graphics.FillPath(background, path);
+                }
+                if (selected)
+                {
+                    using (SolidBrush accent = new SolidBrush(Theme.Accent))
+                    using (GraphicsPath marker = Theme.Rounded(new Rectangle(4, y + 10, 3, 22), 2)) e.Graphics.FillPath(accent, marker);
+                }
+                IconPainter.Draw(e.Graphics, AppIcon.Playlist, new Rectangle(16, y + 11, 20, 20), selected ? Theme.Text : Theme.Muted, 1.8f);
+                TextRenderer.DrawText(e.Graphics, playlist.Name ?? "Untitled playlist", RowFont, new Rectangle(47, y, Math.Max(0, contentWidth - 55), RowHeight), selected ? Theme.Text : Theme.Muted, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            }
+            DrawScrollbar(e.Graphics);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (draggingScrollbar)
+            {
+                ScrollFromPointer(e.Y);
+                return;
+            }
+            int next = e.X >= Width - 12 ? -1 : IndexAt(e.Y);
+            if (next != hoveredIndex) { hoveredIndex = next; Invalidate(); }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e) { hoveredIndex = -1; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseWheel(MouseEventArgs e) { SetScroll(scrollOffset - Math.Sign(e.Delta) * RowHeight * 3); base.OnMouseWheel(e); }
+        protected override void OnResize(EventArgs e) { SetScroll(scrollOffset); base.OnResize(e); }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                Focus();
+                if (MaximumScroll() > 0 && e.X >= Width - 12)
+                {
+                    draggingScrollbar = true;
+                    Capture = true;
+                    ScrollFromPointer(e.Y);
+                }
+                else Activate(IndexAt(e.Y));
+            }
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            if (draggingScrollbar) { draggingScrollbar = false; Capture = false; }
+            base.OnMouseUp(e);
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e) { if (!Capture) draggingScrollbar = false; base.OnMouseCaptureChanged(e); }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            int selected = SelectedIndex();
+            if (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down)
+            {
+                int next = selected < 0 ? 0 : Math.Max(0, Math.Min(playlists.Count - 1, selected + (e.KeyCode == Keys.Up ? -1 : 1)));
+                if (playlists.Count > 0) SelectedPlaylistId = playlists[next].Id;
+                e.Handled = true;
+            }
+            else if ((e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) && selected >= 0) { Activate(selected); e.Handled = true; }
+            base.OnKeyDown(e);
+        }
+
+        private void Activate(int index)
+        {
+            if (index < 0 || index >= playlists.Count) return;
+            SelectedPlaylistId = playlists[index].Id;
+            Action<Playlist> handler = PlaylistActivated;
+            if (handler != null) handler(playlists[index]);
+        }
+
+        private int IndexAt(int y)
+        {
+            int index = (y + scrollOffset) / RowHeight;
+            return y < 0 || index < 0 || index >= playlists.Count ? -1 : index;
+        }
+
+        private int SelectedIndex()
+        {
+            for (int index = 0; index < playlists.Count; index++) if (string.Equals(playlists[index].Id, selectedPlaylistId, StringComparison.OrdinalIgnoreCase)) return index;
+            return -1;
+        }
+
+        private void EnsureSelectedVisible()
+        {
+            int index = SelectedIndex();
+            if (index < 0 || Height <= 0) return;
+            int top = index * RowHeight;
+            if (top < scrollOffset) SetScroll(top);
+            else if (top + RowHeight > scrollOffset + Height) SetScroll(top + RowHeight - Height);
+        }
+
+        private int MaximumScroll() { return Math.Max(0, playlists.Count * RowHeight - Math.Max(0, Height)); }
+        private void SetScroll(int value) { int next = Math.Max(0, Math.Min(MaximumScroll(), value)); if (next != scrollOffset) { scrollOffset = next; Invalidate(); } }
+
+        private void ScrollFromPointer(int y)
+        {
+            int maximum = MaximumScroll();
+            if (maximum <= 0) return;
+            int thumbHeight = Math.Max(30, Height * Height / Math.Max(Height, playlists.Count * RowHeight));
+            int travel = Math.Max(1, Height - 8 - thumbHeight);
+            double ratio = Math.Max(0, Math.Min(1, (y - 4 - thumbHeight / 2d) / travel));
+            SetScroll((int)Math.Round(maximum * ratio));
+        }
+
+        private void DrawScrollbar(Graphics graphics)
+        {
+            int maximum = MaximumScroll();
+            if (maximum <= 0 || Height < 20) return;
+            int thumbHeight = Math.Max(30, Height * Height / Math.Max(Height, playlists.Count * RowHeight));
+            int travel = Math.Max(1, Height - 8 - thumbHeight);
+            int top = 4 + (int)Math.Round((double)scrollOffset / maximum * travel);
+            using (SolidBrush track = new SolidBrush(Theme.Surface)) graphics.FillRectangle(track, Width - 7, 4, 3, Height - 8);
+            using (SolidBrush thumb = new SolidBrush(draggingScrollbar ? Theme.Accent : Theme.Faint))
+            using (GraphicsPath path = Theme.Rounded(new Rectangle(Width - 8, top, 5, thumbHeight), 3)) graphics.FillPath(thumb, path);
+        }
+    }
+
     internal sealed class ValueSlider : Control
     {
         private double value;

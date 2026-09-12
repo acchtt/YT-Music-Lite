@@ -30,7 +30,7 @@ These controls are available from the main player and mini player. The tray menu
 
 ## Install
 
-Download `YTMusicLite-v7.2.1-win-x64-setup.exe` from the latest GitHub release. A portable ZIP is also provided and is used by the verified in-app updater.
+Download `YTMusicLite-v7.2.2-win-x64-setup.exe` from the latest GitHub release. A portable ZIP is also provided and is used by the verified in-app updater.
 
 User data is stored separately from the installation directory, so upgrading preserves the library and playlists.
 

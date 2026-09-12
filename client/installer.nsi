@@ -3,10 +3,10 @@ RequestExecutionLevel user
 SetCompressor /SOLID lzma
 
 !ifndef VERSION
-  !define VERSION "7.2.1"
+  !define VERSION "7.2.2"
 !endif
 !ifndef VERSION4
-  !define VERSION4 "7.2.1.0"
+  !define VERSION4 "7.2.2.0"
 !endif
 !ifndef BUILDDIR
   !error "BUILDDIR must point to the native build directory"

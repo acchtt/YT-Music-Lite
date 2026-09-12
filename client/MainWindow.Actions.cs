@@ -21,11 +21,7 @@ namespace YTMusicLite.Client
                 historyIndex = history.Count - 1;
             }
             foreach (KeyValuePair<AppPage, NavButton> item in navigationButtons) { item.Value.Selected = item.Key == page; item.Value.Invalidate(); }
-            foreach (Control control in playlistNavigation.Controls)
-            {
-                NavButton button = control as NavButton;
-                if (button != null) { button.Selected = page == AppPage.Playlist && string.Equals(Convert.ToString(button.Tag), playlist == null ? null : playlist.Id, StringComparison.Ordinal); button.Invalidate(); }
-            }
+            playlistNavigation.SelectedPlaylistId = page == AppPage.Playlist && playlist != null ? playlist.Id : null;
             backButton.Enabled = historyIndex > 0;
             forwardButton.Enabled = historyIndex >= 0 && historyIndex < history.Count - 1;
             RenderPage();
@@ -620,14 +616,8 @@ namespace YTMusicLite.Client
 
         private void RefreshPlaylistNavigation()
         {
-            playlistNavigation.Controls.Clear();
-            foreach (Playlist playlist in library.Playlists.OrderBy(item => item.Name))
-            {
-                Playlist target = playlist;
-                NavButton button = new NavButton { Label = target.Name, Icon = AppIcon.Playlist, AccessibleName = "Playlist " + target.Name, Width = Math.Max(120, playlistNavigation.ClientSize.Width - 2), Tag = target.Id };
-                button.Click += delegate { Navigate(AppPage.Playlist, target, true); };
-                playlistNavigation.Controls.Add(button);
-            }
+            playlistNavigation.SetPlaylists(library.Playlists.OrderBy(item => item.Name));
+            playlistNavigation.SelectedPlaylistId = currentPage == AppPage.Playlist && currentPlaylist != null ? currentPlaylist.Id : null;
         }
 
         private void ShowPlaylistMenuForSelected()

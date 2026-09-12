@@ -26,6 +26,14 @@ namespace YTMusicLite.Client
                 searchResults = new List<Track> { first, second };
                 queue.Add(first); queue.Add(second); queueIndex = 0;
                 RefreshPlaylistNavigation();
+                Assert(playlistNavigation.PlaylistCount == 1, "Sidebar playlist navigation");
+                List<Playlist> overflowPlaylists = new List<Playlist>();
+                for (int index = 0; index < 32; index++) overflowPlaylists.Add(new Playlist { Id = "overflow-" + index, Name = "Playlist " + index.ToString("00"), CreatedUtc = DateTime.UtcNow });
+                library.Playlists.AddRange(overflowPlaylists);
+                RefreshPlaylistNavigation();
+                Assert(playlistNavigation.PlaylistCount == 33, "Virtualized sidebar playlist overflow");
+                foreach (Playlist extra in overflowPlaylists) library.Playlists.Remove(extra);
+                RefreshPlaylistNavigation();
 
                 Navigate(AppPage.Library, null, true);
                 Assert(trackList.Items.Count == 2, "Library navigation");
