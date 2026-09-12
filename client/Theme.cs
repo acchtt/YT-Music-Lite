@@ -112,7 +112,7 @@ namespace YTMusicLite.Client
                     case AppIcon.Add:
                         graphics.DrawLine(pen, 12, 4, 12, 20); graphics.DrawLine(pen, 4, 12, 20, 12); break;
                     case AppIcon.Heart:
-                        using (GraphicsPath heart = new GraphicsPath()) { heart.StartFigure(); heart.AddBezier(12, 21, 10, 18, 4, 15, 4, 9); heart.AddBezier(4, 4, 10, 3, 12, 7); heart.AddBezier(14, 3, 20, 4, 20, 9); heart.AddBezier(20, 15, 14, 18, 12, 21); heart.CloseFigure(); graphics.DrawPath(pen, heart); } break;
+                        using (GraphicsPath heart = new GraphicsPath()) { heart.StartFigure(); heart.AddBezier(12, 21, 10, 18, 4, 15, 4, 9); heart.AddBezier(4, 9, 4, 4, 10, 3, 12, 7); heart.AddBezier(12, 7, 14, 3, 20, 4, 20, 9); heart.AddBezier(20, 9, 20, 15, 14, 18, 12, 21); heart.CloseFigure(); graphics.DrawPath(pen, heart); } break;
                     case AppIcon.More:
                         graphics.FillEllipse(brush, 4, 10, 4, 4); graphics.FillEllipse(brush, 10, 10, 4, 4); graphics.FillEllipse(brush, 16, 10, 4, 4); break;
                     case AppIcon.Volume:
