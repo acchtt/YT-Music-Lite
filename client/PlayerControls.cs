@@ -9,6 +9,7 @@ namespace YTMusicLite.Client
     {
         private double value;
         private bool dragging;
+        public bool IsDragging { get { return dragging; } }
         public double Minimum { get; set; }
         public double Maximum { get; set; }
         public double Value
@@ -28,9 +29,10 @@ namespace YTMusicLite.Client
             Cursor = Cursors.Hand;
         }
 
-        protected override void OnMouseDown(MouseEventArgs e) { dragging = true; SetFromX(e.X); Capture = true; base.OnMouseDown(e); }
+        protected override void OnMouseDown(MouseEventArgs e) { if (e.Button == MouseButtons.Left) { Focus(); dragging = true; Capture = true; SetFromX(e.X); } base.OnMouseDown(e); }
         protected override void OnMouseMove(MouseEventArgs e) { if (dragging) SetFromX(e.X); base.OnMouseMove(e); }
         protected override void OnMouseUp(MouseEventArgs e) { if (dragging) { dragging = false; SetFromX(e.X); Capture = false; Commit(); } base.OnMouseUp(e); }
+        protected override void OnMouseCaptureChanged(EventArgs e) { if (dragging && !Capture) { dragging = false; Commit(); } base.OnMouseCaptureChanged(e); }
         protected override void OnKeyDown(KeyEventArgs e)
         {
             double step = e.Control ? (Maximum - Minimum) / 100d : (Maximum - Minimum) / 20d;

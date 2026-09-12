@@ -281,6 +281,7 @@ namespace YTMusicLite.Client
         {
             int adjusted = Math.Max(0, Math.Min(100, value));
             if (adjusted > 0) lastAudibleVolume = adjusted;
+            currentVolume = adjusted;
             snapshot.Volume = adjusted;
             clientSettings.Volume = adjusted;
             SavePlaybackSettings();
@@ -290,14 +291,14 @@ namespace YTMusicLite.Client
 
         private async Task ToggleMuteAsync()
         {
-            int target = snapshot.Volume > 0 ? 0 : Math.Max(1, lastAudibleVolume);
+            int target = currentVolume > 0 ? 0 : Math.Max(1, lastAudibleVolume);
             volumeSlider.Value = target;
             await SetVolumeAsync(target);
         }
 
         private async Task AdjustVolumeAsync(int change)
         {
-            int target = Math.Max(0, Math.Min(100, snapshot.Volume + change));
+            int target = Math.Max(0, Math.Min(100, currentVolume + change));
             volumeSlider.Value = target;
             await SetVolumeAsync(target);
         }
@@ -511,6 +512,7 @@ namespace YTMusicLite.Client
 
         private void ApplySnapshot(PlaybackSnapshot update)
         {
+            update.Volume = currentVolume;
             snapshot = update;
             playPauseButton.Icon = update.State == PlaybackState.Playing ? AppIcon.Pause : AppIcon.Play;
             playPauseButton.Invalidate();
@@ -531,11 +533,11 @@ namespace YTMusicLite.Client
             double duration = update.DurationSeconds > 0 ? update.DurationSeconds : (update.Track == null ? 0 : update.Track.DurationSeconds);
             updatingProgress = true;
             progressSlider.Maximum = Math.Max(1, duration);
-            progressSlider.Value = Math.Min(progressSlider.Maximum, update.PositionSeconds);
+            if (!progressSlider.IsDragging) progressSlider.Value = Math.Min(progressSlider.Maximum, update.PositionSeconds);
             elapsedLabel.Text = FormatTime(update.PositionSeconds);
             durationLabel.Text = FormatTime(duration);
             updatingProgress = false;
-            volumeSlider.Value = update.Volume;
+            if (!volumeSlider.IsDragging) volumeSlider.Value = currentVolume;
             if (update.Volume > 0) lastAudibleVolume = update.Volume;
             muteButton.Icon = update.Volume == 0 ? AppIcon.VolumeMuted : AppIcon.Volume;
             muteButton.AccessibleName = update.Volume == 0 ? "Unmute" : "Mute";

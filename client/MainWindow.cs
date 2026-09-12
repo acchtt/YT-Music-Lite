@@ -35,6 +35,7 @@ namespace YTMusicLite.Client
         private bool shuffleEnabled;
         private RepeatMode repeatMode;
         private int lastAudibleVolume = 85;
+        private int currentVolume = 85;
 
         private Panel sidebar;
         private FlowLayoutPanel playlistNavigation;
@@ -83,6 +84,7 @@ namespace YTMusicLite.Client
             settingsStore = new SettingsStore();
             clientSettings = automation ? new ClientSettings() : settingsStore.Load();
             clientSettings.Volume = Math.Max(0, Math.Min(100, clientSettings.Volume));
+            currentVolume = clientSettings.Volume;
             shuffleEnabled = clientSettings.Shuffle;
             repeatMode = ParseRepeatMode(clientSettings.RepeatMode);
             lastAudibleVolume = clientSettings.Volume > 0 ? clientSettings.Volume : 85;
@@ -339,7 +341,7 @@ namespace YTMusicLite.Client
             access.Controls.Add(accessButtons);
             stack.Controls.Add(access);
             stack.Controls.Add(SettingsCard("Playback and memory", "Native audio, bounded resources", "mpv runs without video, resolver processes exit after each lookup, playback buffers are capped, and artwork caching is bounded."));
-            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.1.0", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
+            SectionCard update = SettingsCard("Updates", "YT Music Lite 7.1.1", "Updates are downloaded from this repository and verified with SHA-256 before installation.");
             update.Height = 130;
             update.Margin = Padding.Empty;
             PillButton check = new PillButton { Label = "Check for updates", Width = 166, ShowIcon = true, Icon = AppIcon.Download, Left = 18, Top = 92 };

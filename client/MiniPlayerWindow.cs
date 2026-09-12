@@ -144,10 +144,10 @@ namespace YTMusicLite.Client
             playPause.Invalidate();
             double total = snapshot.DurationSeconds > 0 ? snapshot.DurationSeconds : (snapshot.Track == null ? 0 : snapshot.Track.DurationSeconds);
             progress.Maximum = Math.Max(1, total);
-            progress.Value = Math.Min(progress.Maximum, snapshot.PositionSeconds);
+            if (!progress.IsDragging) progress.Value = Math.Min(progress.Maximum, snapshot.PositionSeconds);
             elapsed.Text = FormatTime(snapshot.PositionSeconds);
             duration.Text = FormatTime(total);
-            volume.Value = snapshot.Volume;
+            if (!volume.IsDragging) volume.Value = snapshot.Volume;
             mute.Icon = snapshot.Volume == 0 ? AppIcon.VolumeMuted : AppIcon.Volume;
             mute.AccessibleName = snapshot.Volume == 0 ? "Unmute" : "Mute";
             mute.Invalidate();

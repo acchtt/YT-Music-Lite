@@ -57,6 +57,12 @@ namespace YTMusicLite.Client
                 Assert(shuffleEnabled && shuffleButton.Checked, "Shuffle state");
                 CycleRepeatMode();
                 Assert(repeatMode == RepeatMode.All && repeatButton.Checked, "Repeat state");
+                currentVolume = 42;
+                ApplySnapshot(new PlaybackSnapshot { State = PlaybackState.Paused, Volume = 85 });
+                Assert(snapshot.Volume == 42 && Math.Abs(volumeSlider.Value - 42) < 0.01, "Stale volume snapshot suppression");
+                currentVolume = 85;
+                clientSettings.Volume = 85;
+                ApplySnapshot(new PlaybackSnapshot { State = PlaybackState.Stopped, Volume = 85 });
 
                 using (Bitmap image = new Bitmap(Width, Height)) { DrawToBitmap(image, new Rectangle(Point.Empty, Size)); image.Save("client-home.png"); }
                 Navigate(AppPage.Search, null, true);
