@@ -98,7 +98,7 @@ namespace YTMusicLite.Client
                     case AppIcon.Queue:
                         graphics.DrawLine(pen, 3, 6, 15, 6); graphics.DrawLine(pen, 3, 12, 15, 12); graphics.DrawLine(pen, 3, 18, 11, 18); graphics.FillPolygon(brush, new PointF[] { new PointF(16, 15), new PointF(22, 18.5f), new PointF(16, 22) }); break;
                     case AppIcon.Settings:
-                        graphics.DrawEllipse(pen, 8, 8, 8, 8); graphics.DrawEllipse(pen, 3, 3, 18, 18); graphics.DrawLine(pen, 12, 1, 12, 5); graphics.DrawLine(pen, 12, 19, 12, 23); graphics.DrawLine(pen, 1, 12, 5, 12); graphics.DrawLine(pen, 19, 12, 23, 12); break;
+                        graphics.DrawEllipse(pen, 8.5f, 8.5f, 7, 7); graphics.DrawEllipse(pen, 5, 5, 14, 14); graphics.DrawLine(pen, 12, 2, 12, 5); graphics.DrawLine(pen, 12, 19, 12, 22); graphics.DrawLine(pen, 2, 12, 5, 12); graphics.DrawLine(pen, 19, 12, 22, 12); graphics.DrawLine(pen, 5, 5, 7, 7); graphics.DrawLine(pen, 17, 17, 19, 19); graphics.DrawLine(pen, 19, 5, 17, 7); graphics.DrawLine(pen, 7, 17, 5, 19); break;
                     case AppIcon.Play:
                         graphics.FillPolygon(brush, new PointF[] { new PointF(8, 5), new PointF(20, 12), new PointF(8, 19) }); break;
                     case AppIcon.Pause:
@@ -112,19 +112,19 @@ namespace YTMusicLite.Client
                     case AppIcon.Add:
                         graphics.DrawLine(pen, 12, 4, 12, 20); graphics.DrawLine(pen, 4, 12, 20, 12); break;
                     case AppIcon.Heart:
-                        using (GraphicsPath heart = new GraphicsPath()) { heart.AddBezier(12, 20, 2, 14, 3, 6, 8, 5); heart.AddBezier(8, 5, 11, 4, 12, 7, 12, 7); heart.AddBezier(12, 7, 13, 4, 16, 5, 16, 5); heart.AddBezier(21, 6, 22, 14, 12, 20, 12, 20); graphics.DrawPath(pen, heart); } break;
+                        using (GraphicsPath heart = new GraphicsPath()) { heart.StartFigure(); heart.AddBezier(12, 21, 10, 18, 4, 15, 4, 9); heart.AddBezier(4, 4, 10, 3, 12, 7); heart.AddBezier(14, 3, 20, 4, 20, 9); heart.AddBezier(20, 15, 14, 18, 12, 21); heart.CloseFigure(); graphics.DrawPath(pen, heart); } break;
                     case AppIcon.More:
                         graphics.FillEllipse(brush, 4, 10, 4, 4); graphics.FillEllipse(brush, 10, 10, 4, 4); graphics.FillEllipse(brush, 16, 10, 4, 4); break;
                     case AppIcon.Volume:
-                        graphics.FillPolygon(brush, new PointF[] { new PointF(3, 9), new PointF(8, 9), new PointF(13, 5), new PointF(13, 19), new PointF(8, 15), new PointF(3, 15) }); graphics.DrawArc(pen, 14, 7, 6, 10, -60, 120); break;
+                        graphics.FillPolygon(brush, new PointF[] { new PointF(3, 9), new PointF(8, 9), new PointF(13, 5), new PointF(13, 19), new PointF(8, 15), new PointF(3, 15) }); graphics.DrawArc(pen, 14, 8, 5, 8, -60, 120); graphics.DrawArc(pen, 13, 5, 9, 14, -55, 110); break;
                     case AppIcon.VolumeMuted:
                         graphics.FillPolygon(brush, new PointF[] { new PointF(3, 9), new PointF(8, 9), new PointF(13, 5), new PointF(13, 19), new PointF(8, 15), new PointF(3, 15) }); graphics.DrawLine(pen, 16, 9, 21, 15); graphics.DrawLine(pen, 21, 9, 16, 15); break;
                     case AppIcon.Shuffle:
-                        graphics.DrawLines(pen, new PointF[] { new PointF(3, 6), new PointF(7, 6), new PointF(17, 18), new PointF(21, 18) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 15), new PointF(21, 18), new PointF(17, 21) }); graphics.DrawLines(pen, new PointF[] { new PointF(3, 18), new PointF(7, 18), new PointF(11, 13) }); graphics.DrawLines(pen, new PointF[] { new PointF(13, 10), new PointF(17, 6), new PointF(21, 6) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 3), new PointF(21, 6), new PointF(17, 9) }); break;
+                        graphics.DrawBezier(pen, 3, 7, 8, 7, 12, 17, 18, 17); graphics.DrawLine(pen, 18, 17, 21, 17); graphics.DrawLines(pen, new PointF[] { new PointF(18, 14), new PointF(21, 17), new PointF(18, 20) }); graphics.DrawBezier(pen, 3, 17, 8, 17, 12, 7, 18, 7); graphics.DrawLine(pen, 18, 7, 21, 7); graphics.DrawLines(pen, new PointF[] { new PointF(18, 4), new PointF(21, 7), new PointF(18, 10) }); break;
                     case AppIcon.Repeat:
-                        graphics.DrawLines(pen, new PointF[] { new PointF(4, 9), new PointF(7, 6), new PointF(19, 6), new PointF(21, 8) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 3), new PointF(21, 6), new PointF(18, 10) }); graphics.DrawLines(pen, new PointF[] { new PointF(20, 15), new PointF(17, 18), new PointF(5, 18), new PointF(3, 16) }); graphics.DrawLines(pen, new PointF[] { new PointF(7, 21), new PointF(3, 18), new PointF(6, 14) }); break;
+                        graphics.DrawBezier(pen, 4, 10, 4, 7, 7, 5, 10, 5); graphics.DrawLine(pen, 10, 5, 21, 5); graphics.DrawLines(pen, new PointF[] { new PointF(18, 2), new PointF(21, 5), new PointF(18, 8) }); graphics.DrawBezier(pen, 20, 14, 20, 17, 17, 19, 14, 19); graphics.DrawLine(pen, 14, 19, 3, 19); graphics.DrawLines(pen, new PointF[] { new PointF(6, 16), new PointF(3, 19), new PointF(6, 22) }); break;
                     case AppIcon.RepeatOne:
-                        graphics.DrawLines(pen, new PointF[] { new PointF(4, 9), new PointF(7, 6), new PointF(19, 6), new PointF(21, 8) }); graphics.DrawLines(pen, new PointF[] { new PointF(17, 3), new PointF(21, 6), new PointF(18, 10) }); graphics.DrawLines(pen, new PointF[] { new PointF(20, 15), new PointF(17, 18), new PointF(5, 18), new PointF(3, 16) }); graphics.DrawLines(pen, new PointF[] { new PointF(7, 21), new PointF(3, 18), new PointF(6, 14) }); using (Font one = new Font("Segoe UI", 7, FontStyle.Bold)) TextRenderer.DrawText(graphics, "1", one, new Rectangle(9, 8, 7, 9), color, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding); break;
+                        graphics.DrawBezier(pen, 4, 10, 4, 7, 7, 5, 10, 5); graphics.DrawLine(pen, 10, 5, 21, 5); graphics.DrawLines(pen, new PointF[] { new PointF(18, 2), new PointF(21, 5), new PointF(18, 8) }); graphics.DrawBezier(pen, 20, 14, 20, 17, 17, 19, 14, 19); graphics.DrawLine(pen, 14, 19, 3, 19); graphics.DrawLines(pen, new PointF[] { new PointF(6, 16), new PointF(3, 19), new PointF(6, 22) }); using (Font one = new Font("Segoe UI", 7, FontStyle.Bold)) using (StringFormat format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center }) graphics.DrawString("1", one, brush, new RectangleF(8, 8, 8, 8), format); break;
                     case AppIcon.Mini:
                         graphics.DrawRectangle(pen, 3, 4, 18, 16); graphics.FillRectangle(brush, 12, 13, 7, 5); break;
                     case AppIcon.Close:

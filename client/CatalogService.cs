@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -53,7 +54,7 @@ namespace YTMusicLite.Client
                     track.Title = Value(data, "title");
                     track.Artist = First(data, "channel", "uploader", "artist");
                     track.Source = "https://www.youtube.com/watch?v=" + Uri.EscapeDataString(id);
-                    track.ThumbnailUrl = First(data, "thumbnail");
+                    track.ThumbnailUrl = Thumbnail(data, id);
                     track.DurationSeconds = Number(data, "duration");
                     results.Add(track);
                 }
@@ -93,6 +94,27 @@ namespace YTMusicLite.Client
         {
             double number;
             return double.TryParse(Value(data, key), NumberStyles.Float, CultureInfo.InvariantCulture, out number) ? number : 0;
+        }
+
+        internal static string Thumbnail(Dictionary<string, object> data, string id)
+        {
+            string direct = Value(data, "thumbnail");
+            Uri parsed;
+            if (Uri.TryCreate(direct, UriKind.Absolute, out parsed)) return direct;
+            object raw;
+            string best = "";
+            if (data.TryGetValue("thumbnails", out raw))
+            {
+                IEnumerable entries = raw as IEnumerable;
+                if (entries != null) foreach (object entry in entries)
+                {
+                    Dictionary<string, object> item = entry as Dictionary<string, object>;
+                    if (item == null) continue;
+                    string url = Value(item, "url");
+                    if (Uri.TryCreate(url, UriKind.Absolute, out parsed)) best = url;
+                }
+            }
+            return string.IsNullOrEmpty(best) ? YouTubeArtwork.ForVideo(id) : best;
         }
 
         private static string Trim(string value, int length)

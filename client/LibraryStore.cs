@@ -141,7 +141,13 @@ namespace YTMusicLite.Client
             if (data.SavedTracks == null) data.SavedTracks = new List<Track>();
             if (data.Playlists == null) data.Playlists = new List<Playlist>();
             if (data.RecentTracks == null) data.RecentTracks = new List<Track>();
-            foreach (Playlist playlist in data.Playlists) if (playlist.Tracks == null) playlist.Tracks = new List<Track>();
+            foreach (Track track in data.SavedTracks) YouTubeArtwork.Ensure(track);
+            foreach (Track track in data.RecentTracks) YouTubeArtwork.Ensure(track);
+            foreach (Playlist playlist in data.Playlists)
+            {
+                if (playlist.Tracks == null) playlist.Tracks = new List<Track>();
+                foreach (Track track in playlist.Tracks) YouTubeArtwork.Ensure(track);
+            }
             data.SchemaVersion = 2;
         }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -68,7 +69,7 @@ namespace YTMusicLite.Client
                         Title = First(data, "title", "fulltitle"),
                         Artist = First(data, "artist", "channel", "uploader"),
                         Source = "https://www.youtube.com/watch?v=" + Uri.EscapeDataString(id),
-                        ThumbnailUrl = Value(data, "thumbnail"),
+                        ThumbnailUrl = Thumbnail(data, id),
                         DurationSeconds = Number(data, "duration"),
                         AddedUtc = DateTime.UtcNow
                     };
@@ -99,6 +100,27 @@ namespace YTMusicLite.Client
         {
             double number;
             return double.TryParse(Value(data, key), NumberStyles.Float, CultureInfo.InvariantCulture, out number) ? number : 0;
+        }
+
+        private static string Thumbnail(Dictionary<string, object> data, string id)
+        {
+            string direct = Value(data, "thumbnail");
+            Uri parsed;
+            if (Uri.TryCreate(direct, UriKind.Absolute, out parsed)) return direct;
+            object raw;
+            string best = "";
+            if (data.TryGetValue("thumbnails", out raw))
+            {
+                IEnumerable entries = raw as IEnumerable;
+                if (entries != null) foreach (object entry in entries)
+                {
+                    Dictionary<string, object> item = entry as Dictionary<string, object>;
+                    if (item == null) continue;
+                    string url = Value(item, "url");
+                    if (Uri.TryCreate(url, UriKind.Absolute, out parsed)) best = url;
+                }
+            }
+            return string.IsNullOrEmpty(best) ? YouTubeArtwork.ForVideo(id) : best;
         }
 
         private static string Short(string value)

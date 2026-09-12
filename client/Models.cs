@@ -85,4 +85,33 @@ namespace YTMusicLite.Client
         public int Volume { get; set; }
         public string Error { get; set; }
     }
+
+    internal static class YouTubeArtwork
+    {
+        public static string ForVideo(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return "";
+            return "https://i.ytimg.com/vi/" + Uri.EscapeDataString(id.Trim()) + "/hqdefault.jpg";
+        }
+
+        public static void Ensure(Track track)
+        {
+            if (track == null || IsWebUrl(track.ThumbnailUrl) || !IsYouTube(track.Source)) return;
+            track.ThumbnailUrl = ForVideo(track.Id);
+        }
+
+        private static bool IsWebUrl(string value)
+        {
+            Uri uri;
+            return Uri.TryCreate(value, UriKind.Absolute, out uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+        }
+
+        private static bool IsYouTube(string value)
+        {
+            Uri uri;
+            if (!Uri.TryCreate(value, UriKind.Absolute, out uri)) return false;
+            string host = uri.Host.ToLowerInvariant();
+            return host == "youtu.be" || host == "youtube.com" || host.EndsWith(".youtube.com");
+        }
+    }
 }

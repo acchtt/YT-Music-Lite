@@ -43,7 +43,17 @@ namespace YTMusicLite.Client
                 Assert(!BrowserAccessValidator.HasAccountCookie(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\tplain"), "Anonymous cookie rejection");
                 AccountSyncService syncParser = new AccountSyncService(clientSettings);
                 List<Track> synced = syncParser.Parse("{\"id\":\"liked-1\",\"title\":\"Liked song\",\"artist\":\"Test artist\",\"duration\":123}");
-                Assert(synced.Count == 1 && synced[0].Id == "liked-1" && synced[0].Artist == "Test artist", "Account library parsing");
+                Assert(synced.Count == 1 && synced[0].Id == "liked-1" && synced[0].Artist == "Test artist" && synced[0].ThumbnailUrl.Contains("liked-1"), "Account library parsing");
+                Dictionary<string, object> artworkData = new Dictionary<string, object>();
+                artworkData["thumbnails"] = new object[]
+                {
+                    new Dictionary<string, object> { { "url", "https://i.ytimg.com/vi/thumb-test/mqdefault.jpg" } },
+                    new Dictionary<string, object> { { "url", "https://i.ytimg.com/vi/thumb-test/hqdefault.jpg" } }
+                };
+                Assert(CatalogService.Thumbnail(artworkData, "thumb-test").EndsWith("/hqdefault.jpg"), "Thumbnail array parsing");
+                Track repairedArtwork = new Track { Id = "repair-test", Source = "https://www.youtube.com/watch?v=repair-test", ThumbnailUrl = "Unknown artist" };
+                YouTubeArtwork.Ensure(repairedArtwork);
+                Assert(repairedArtwork.ThumbnailUrl.Contains("repair-test"), "Existing artwork repair");
                 Assert(BrowserSignIn.Arguments("brave").Contains("--new-window") && BrowserSignIn.Arguments("brave").Contains("accounts.google.com"), "Brave sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("edge").Contains("--new-window") && BrowserSignIn.Arguments("edge").Contains("accounts.google.com"), "Edge sign-in launch arguments");
                 Assert(BrowserSignIn.Arguments("firefox").Contains("-new-window") && BrowserSignIn.Arguments("firefox").Contains("accounts.google.com"), "Firefox sign-in launch arguments");
