@@ -1,6 +1,6 @@
-# YT Music Lite — Native Windows
+# YT Music Lite 7 — Native Windows
 
-YT Music Lite 7.2 is a browser-free Windows music client focused on low memory use. It provides YouTube search, automatically synced account playlists, saved music, local playlists, a history-driven Discover Weekly mix, a playback queue, local audio, media keys, a mini player, and verified in-app updates.
+YT Music Lite 7.0.x is the canonical Windows release line. The current client is browser-free and focused on low memory use. It provides YouTube search, automatically synced account playlists, saved music, local playlists, a history-driven Discover Weekly mix, a playback queue, local audio, media keys, a mini player, and verified in-app updates.
 
 ## Production architecture
 
@@ -30,7 +30,7 @@ These controls are available from the main player and mini player. The tray menu
 
 ## Install
 
-Download `YTMusicLite-v7.2.2-win-x64-setup.exe` from the latest GitHub release. A portable ZIP is also provided and is used by the verified in-app updater.
+Download `YTMusicLite-v7.0.1-win-x64-setup.exe` from the latest `app-v7.0.x` GitHub release. A portable ZIP is also provided and is used by the verified in-app updater.
 
 User data is stored separately from the installation directory, so upgrading preserves the library and playlists.
 

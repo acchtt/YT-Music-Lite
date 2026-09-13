@@ -1,4 +1,4 @@
-name: ytmlite-release
+name: canonical-native-release
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 concurrency:
-  group: ytmlite-release-${{ github.ref }}
+  group: canonical-native-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -63,30 +63,30 @@ jobs:
           $Build = (Resolve-Path .\client\build).Path
           $Release = (Resolve-Path .\client\release).Path
           $MakeNsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
-          & $MakeNsis "/DVERSION=7.2.2" "/DVERSION4=7.2.2.0" "/DBUILDDIR=$Build" "/DOUTDIR=$Release" .\client\installer.nsi
+          & $MakeNsis "/DVERSION=7.0.1" "/DVERSION4=7.0.1.0" "/DBUILDDIR=$Build" "/DOUTDIR=$Release" .\client\installer.nsi
           if ($LASTEXITCODE -ne 0) { throw 'NSIS installer build failed' }
-          $Installer = Join-Path $Release 'YTMusicLite-v7.2.2-win-x64-setup.exe'
+          $Installer = Join-Path $Release 'YTMusicLite-v7.0.1-win-x64-setup.exe'
           $Hash = (Get-FileHash -Algorithm SHA256 $Installer).Hash.ToLowerInvariant()
           "$Hash  $(Split-Path $Installer -Leaf)" | Set-Content -Encoding ascii "$Installer.sha256"
 
       - name: Publish YT Music Lite release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ytmlite-v7.2.2
+          tag_name: app-v7.0.1
           target_commitish: ${{ github.sha }}
-          name: YT Music Lite v7.2.2 — Visible playlist sidebar
+          name: YT Music Lite v7.0.1 — Native canonical update
           make_latest: true
           body: |
-            YT Music Lite v7.2.2 fixes the synced-playlist sidebar for large YouTube Music libraries.
+            YT Music Lite v7.0.1 continues the canonical app-v7.0.x line with the low-memory native Windows client.
 
-            - Replaces the stock flow panel with a custom-drawn, virtualized playlist navigation control.
-            - Keeps all synced playlist rows visible and scrollable for large account libraries.
-            - Adds mouse-wheel, click, and keyboard playlist navigation with selection tracking.
-            - Replaces the bright native scrollbar with a compact dark-theme scrollbar.
+            - Replaces the WebView runtime with native WinForms and audio-only mpv playback.
+            - Automatically syncs YouTube Music playlists and lazily loads their tracks.
+            - Includes the virtualized playlist sidebar, stable volume slider, artwork repair, and native Windows icons.
+            - Keeps Discover Weekly, library management, queue controls, mini player, media keys, and verified updates.
             - Keeps native WinForms, audio-only mpv playback, and the 140 MiB combined memory gate.
             - Includes both a Windows installer and a portable/in-app-update ZIP.
           files: |
-            client/release/YTMusicLite-v7.2.2-win-x64.zip
-            client/release/YTMusicLite-v7.2.2-win-x64.zip.sha256
-            client/release/YTMusicLite-v7.2.2-win-x64-setup.exe
-            client/release/YTMusicLite-v7.2.2-win-x64-setup.exe.sha256
+            client/release/YTMusicLite-v7.0.1-win-x64.zip
+            client/release/YTMusicLite-v7.0.1-win-x64.zip.sha256
+            client/release/YTMusicLite-v7.0.1-win-x64-setup.exe
+            client/release/YTMusicLite-v7.0.1-win-x64-setup.exe.sha256
